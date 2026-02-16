@@ -1,0 +1,29 @@
+{
+  "name": "quickapi-hub",
+  "version": "1.0.0",
+  "description": "QuickAPI Hub - A SaaS platform providing developer utility APIs with freemium pricing",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test src/tests/**/*.test.js",
+    "seed": "node src/scripts/seed.js"
+  },
+  "keywords": ["api", "saas", "developer-tools"],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "better-sqlite3": "^9.4.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "stripe": "^14.14.0",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "uuid": "^9.0.0",
+    "qrcode": "^1.5.3",
+    "sharp": "^0.33.2",
+    "marked": "^11.1.1",
+    "dotenv": "^16.3.1"
+  }
+}
