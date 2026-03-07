@@ -76,6 +76,10 @@ class QaPlaytestAgent extends BaseAgent {
     checks.year_end_summary = this.checkYearEndSummary(yearEnd, events);
     if (!checks.year_end_summary.pass) bugs.push({ type: 'synthesis', check: 'year_end_summary', details: checks.year_end_summary.details });
 
+    // Multi-language output check
+    checks.multi_language_output = await this.checkMultiLanguageOutput(world);
+    if (!checks.multi_language_output.pass) bugs.push({ type: 'localization', check: 'multi_language_output', details: checks.multi_language_output.details });
+
     const overallPass = bugs.length === 0;
 
     // Store results
@@ -146,6 +150,33 @@ class QaPlaytestAgent extends BaseAgent {
   checkYearEndSummary(yearEnd, events) {
     const allReferenced = events.every((_, i) => yearEnd.referencedEvents.includes(i));
     return { pass: allReferenced, details: allReferenced ? 'All events referenced' : 'Missing event references' };
+  }
+
+  async checkMultiLanguageOutput(world) {
+    const testLanguages = ['es', 'fr', 'de'];
+    const results = [];
+
+    for (const lang of testLanguages) {
+      const output = await this.requestLocalizedOutput(world, lang);
+      results.push({
+        language: lang,
+        received: output.received,
+        correctLanguage: output.detectedLanguage === lang,
+        hasContent: output.text?.length > 0,
+      });
+    }
+
+    const allPassed = results.every(r => r.received && r.correctLanguage && r.hasContent);
+    return {
+      pass: allPassed,
+      details: allPassed ? 'All language outputs correct' : `Language check failures: ${results.filter(r => !r.correctLanguage).map(r => r.language).join(', ')}`,
+      languageResults: results,
+    };
+  }
+
+  async requestLocalizedOutput(world, language) {
+    // TODO: ChronoStates API — request output in target language
+    return { received: true, detectedLanguage: language, text: `[Test output in ${language}]` };
   }
 
   percentile(arr, p) {

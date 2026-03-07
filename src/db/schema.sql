@@ -138,7 +138,12 @@ CREATE TABLE IF NOT EXISTS prospect_pipeline (
   product TEXT NOT NULL,
   icp_score REAL DEFAULT 0,
   track TEXT NOT NULL DEFAULT 'user' CHECK (track IN ('user', 'partner')),
-  stage TEXT NOT NULL DEFAULT 'discovered',
+  stage TEXT NOT NULL DEFAULT 'discovered' CHECK (stage IN (
+    -- End-user pipeline stages (track = 'user')
+    'discovered', 'email_drafted', 'contacted', 'replied', 'engaged', 'converted', 'closed_lost',
+    -- Partnership pipeline stages (track = 'partner')
+    'identified', 'pitch_drafted', 'pitched', 'in_discussion', 'evaluating', 'partnership_active', 'declined'
+  )),
   source TEXT,
   last_contacted TIMESTAMPTZ,
   touch_count INTEGER NOT NULL DEFAULT 0,

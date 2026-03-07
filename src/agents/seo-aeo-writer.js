@@ -1,4 +1,5 @@
 const BaseAgent = require('./base-agent');
+const BacklinkBuilderAgent = require('./backlink-builder');
 const products = require('../config/products');
 const { v4: uuidv4 } = require('uuid');
 
@@ -16,6 +17,7 @@ class SeoAeoWriterAgent extends BaseAgent {
     this.keywordCooldownDays = 90;
     this.minInternalLinks = 2;
     this.minExternalLinks = 1;
+    this.backlinkBuilder = new BacklinkBuilderAgent(accountId);
   }
 
   async run() {
@@ -85,6 +87,10 @@ class SeoAeoWriterAgent extends BaseAgent {
       results.keywordsUsed.push(keyword.keyword);
     }
 
+    // Run Backlink Builder sub-agent
+    const backlinkResults = await this.backlinkBuilder.execute();
+    results.backlinkBuilder = backlinkResults;
+
     return results;
   }
 
@@ -144,6 +150,7 @@ class SeoAeoWriterAgent extends BaseAgent {
     const chainItems = [
       { type: 'social_posts', count: 3, agent: 'social-distributor' },
       { type: 'video_script', count: 1, agent: 'video-producer' },
+      { type: 'reddit_comment_response', count: 1, agent: 'pain-point-hunter' },
     ];
 
     if (products[productId]?.hasSubstack) {
