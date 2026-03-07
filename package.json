@@ -1,19 +1,23 @@
 {
-  "name": "quickapi-hub",
-  "version": "1.0.0",
-  "description": "QuickAPI Hub - A SaaS platform providing developer utility APIs with freemium pricing",
+  "name": "beaconops",
+  "version": "2.0.0",
+  "description": "BeaconOps - Autonomous Marketing, Content & Operations Engine for ChronoStates.io, Payroll Beacon, and Budgeting Beacon",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "orchestrator": "node src/orchestrator/index.js",
     "test": "node --test src/tests/**/*.test.js",
-    "seed": "node src/scripts/seed.js"
+    "migrate": "node src/db/migrate.js",
+    "seed": "node src/db/seed.js"
   },
-  "keywords": ["api", "saas", "developer-tools"],
+  "keywords": ["marketing-automation", "multi-agent", "saas", "content-engine"],
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
-    "better-sqlite3": "^9.4.3",
+    "bullmq": "^5.1.0",
+    "ioredis": "^5.3.2",
+    "@supabase/supabase-js": "^2.39.0",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "stripe": "^14.14.0",
@@ -21,9 +25,9 @@
     "helmet": "^7.1.0",
     "express-rate-limit": "^7.1.5",
     "uuid": "^9.0.0",
-    "qrcode": "^1.5.3",
-    "sharp": "^0.33.2",
-    "marked": "^11.1.1",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "resend": "^3.0.0",
+    "node-cron": "^3.0.3",
+    "winston": "^3.11.0"
   }
 }
