@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   fetchDailyReport, fetchPainPoints, fetchPainPointsToday, fetchPipeline,
   fetchAgents, fetchHealthReport, fetchContentPerformance,
-  fetchProductIntelligence, fetchApprovalStats,
+  fetchProductIntelligence, fetchApprovalStats, fetchInfraStatus,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -31,6 +31,7 @@ export default function ReportsPage() {
   const [contentPerf, setContentPerf] = useState({});
   const [intel, setIntel] = useState([]);
   const [todayPainPoints, setTodayPainPoints] = useState(null);
+  const [infraStatus, setInfraStatus] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +46,7 @@ export default function ReportsPage() {
         fetchApprovalStats(),
         fetchProductIntelligence(),
         fetchPainPointsToday(),
+        fetchInfraStatus(),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -58,10 +60,11 @@ export default function ReportsPage() {
       setApprovalStats(val(6)?.stats || val(6));
       setIntel(val(7)?.recommendations || []);
       setTodayPainPoints(val(8));
+      setInfraStatus(val(9));
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[9 + i];
+        const r = results[10 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -437,50 +440,93 @@ export default function ReportsPage() {
       )}
 
       {/* ── 11. Infrastructure Health ─────────────────── */}
-      {health && (
-        <div className="section">
-          <div className="section-header"><h2>Infrastructure Health</h2></div>
-          <div className="stats-row">
-            <StatBlock
-              value={health.unresolvedAlerts?.length ?? infraHealth.unresolvedAlerts ?? 0}
-              label="Unresolved Alerts"
-              color={health.criticalAlerts > 0 ? 'var(--red)' : 'var(--green)'}
-            />
-            <StatBlock
-              value={health.criticalAlerts ?? infraHealth.criticalAlerts ?? 0}
-              label="Critical Alerts"
-              color="var(--red)"
-            />
-          </div>
-
-          {health.unresolvedAlerts?.length > 0 && (
-            <div className="card card-compact">
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Alert</th>
-                      <th>Severity</th>
-                      <th>Service</th>
-                      <th>Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {health.unresolvedAlerts.map((alert, i) => (
-                      <tr key={alert.id || i}>
-                        <td className="text-sm">{alert.message}</td>
-                        <td><span className={`badge ${alert.severity === 'critical' ? 'badge-red' : alert.severity === 'warning' ? 'badge-yellow' : 'badge-muted'}`}>{alert.severity}</span></td>
-                        <td className="text-sm">{alert.service}</td>
-                        <td className="text-sm text-muted">{alert.created_at ? new Date(alert.created_at).toLocaleString() : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+      <div className="section">
+        <div className="section-header">
+          <h2>Infrastructure Health</h2>
+          <a href="/infrastructure" className="btn btn-sm" style={{ textDecoration: 'none', fontSize: 11 }}>View Details</a>
         </div>
-      )}
+
+        {(() => {
+          const infraServices = infraStatus?.services || [];
+          const infraAlerts = infraStatus?.unresolvedAlerts ?? (health?.unresolvedAlerts?.length ?? infraHealth.unresolvedAlerts ?? 0);
+          const infraOverall = infraStatus?.overall || 'unknown';
+          const overallColor = infraOverall === 'healthy' ? 'var(--green)' : infraOverall === 'warning' ? 'var(--yellow)' : infraOverall === 'critical' ? 'var(--red)' : 'var(--text-muted)';
+
+          return (
+            <>
+              <div className="stats-row">
+                <StatBlock
+                  value={infraOverall.charAt(0).toUpperCase() + infraOverall.slice(1)}
+                  label="Overall Status"
+                  color={overallColor}
+                />
+                <StatBlock value={infraServices.length || '—'} label="Services" />
+                <StatBlock
+                  value={infraAlerts}
+                  label="Active Alerts"
+                  color={infraAlerts > 0 ? 'var(--red)' : 'var(--green)'}
+                />
+                <StatBlock
+                  value={health?.criticalAlerts ?? infraHealth.criticalAlerts ?? 0}
+                  label="Critical"
+                  color="var(--red)"
+                />
+              </div>
+
+              {infraServices.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginTop: 12 }}>
+                  {infraServices.map(svc => {
+                    const dotColor = svc.status === 'healthy' ? 'var(--green)'
+                      : svc.status === 'warning' ? 'var(--yellow)'
+                      : svc.status === 'critical' || svc.status === 'error' ? 'var(--red)'
+                      : 'var(--text-muted)';
+                    return (
+                      <div key={svc.service} className="card card-compact" style={{ margin: 0, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+                          background: dotColor, flexShrink: 0,
+                          boxShadow: svc.status === 'critical' ? `0 0 6px ${dotColor}` : undefined,
+                        }} />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="text-sm font-semibold" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{svc.service}</div>
+                          <div className="text-xs text-muted">{svc.response_time_ms != null ? `${svc.response_time_ms}ms` : svc.status}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {health?.unresolvedAlerts?.length > 0 && (
+                <div className="card card-compact" style={{ marginTop: 12 }}>
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Alert</th>
+                          <th>Severity</th>
+                          <th>Service</th>
+                          <th>Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {health.unresolvedAlerts.map((alert, i) => (
+                          <tr key={alert.id || i}>
+                            <td className="text-sm">{alert.message}</td>
+                            <td><span className={`badge ${alert.severity === 'critical' ? 'badge-red' : alert.severity === 'warning' ? 'badge-yellow' : 'badge-muted'}`}>{alert.severity}</span></td>
+                            <td className="text-sm">{alert.service}</td>
+                            <td className="text-sm text-muted">{alert.created_at ? new Date(alert.created_at).toLocaleString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
+      </div>
 
       {/* ── 12. Lifecycle & Inbox ─────────────────────── */}
       <div className="section">
