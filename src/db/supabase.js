@@ -16,7 +16,12 @@ function getSupabase() {
 }
 
 function isSupabaseConfigured() {
-  return !!(config.supabase.url && config.supabase.serviceKey);
+  const url = config.supabase.url;
+  const key = config.supabase.serviceKey;
+  if (!url || !key) return false;
+  // Reject placeholder values from .env.example
+  if (url.includes('your-project') || key.startsWith('your-')) return false;
+  return true;
 }
 
 module.exports = { getSupabase, isSupabaseConfigured };

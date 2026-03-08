@@ -37,11 +37,15 @@ app.get('/', (_req, res) => {
 
 // Health check
 app.get('/health', (_req, res) => {
+  const { isSupabaseConfigured } = require('./db/supabase');
   res.json({
     status: 'ok',
     service: 'beaconops',
     version: '2.0.0',
     timestamp: new Date().toISOString(),
+    dependencies: {
+      supabase: isSupabaseConfigured() ? 'connected' : 'not configured',
+    },
   });
 });
 
@@ -56,11 +60,29 @@ app.use('/api', (req, _res, next) => {
   next();
 });
 
+// Supabase availability guard — returns 503 instead of crashing with 500
+const { isSupabaseConfigured } = require('./db/supabase');
+const supabaseConfigured = isSupabaseConfigured();
+if (!supabaseConfigured) {
+  logger.warn('Supabase not configured — dashboard API routes will return mock/empty data. Set SUPABASE_URL and SUPABASE_SERVICE_KEY in .env');
+}
+
+function requireSupabase(req, res, next) {
+  if (!supabaseConfigured) {
+    return res.status(503).json({
+      error: 'Database not configured',
+      message: 'Set SUPABASE_URL and SUPABASE_SERVICE_KEY in .env to enable this endpoint.',
+      docs: 'Copy .env.example to .env and fill in your Supabase credentials.',
+    });
+  }
+  next();
+}
+
 // BeaconOps Dashboard API
-app.use('/api/approval', approvalRoutes);
-app.use('/api/agents', agentRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/reports', reportRoutes);
+app.use('/api/approval', requireSupabase, approvalRoutes);
+app.use('/api/agents', agentRoutes); // agents has its own graceful fallback
+app.use('/api/settings', requireSupabase, settingsRoutes);
+app.use('/api/reports', requireSupabase, reportRoutes);
 
 // API info
 app.get('/api', (_req, res) => {
