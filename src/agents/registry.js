@@ -16,6 +16,7 @@ const AdCreativeAgent = require('./ad-creative');
 const ProductIntelligenceAgent = require('./product-intelligence');
 const UserLifecycleAgent = require('./user-lifecycle');
 const InfrastructureMonitorAgent = require('./infrastructure-monitor');
+const BuilderCommunityAgent = require('./builder-community');
 
 const registry = {
   'inbox-monitor': {
@@ -145,6 +146,14 @@ const registry = {
     cycle: 'continuous',
     essential: true,
     criticalOnFailure: true,
+  },
+  'builder-community': {
+    Agent: BuilderCommunityAgent,
+    name: 'Builder Community',
+    domain: 'Builder intel gathering & promo posting',
+    cycle: 'daily',
+    essential: false,
+    criticalOnFailure: false,
   },
 };
 

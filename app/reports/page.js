@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import {
-  fetchDailyReport, fetchPainPoints, fetchPipeline,
+  fetchDailyReport, fetchPainPoints, fetchPainPointsToday, fetchPipeline,
   fetchAgents, fetchHealthReport, fetchContentPerformance,
-  fetchProductIntelligence, fetchApprovalStats,
+  fetchProductIntelligence, fetchApprovalStats, fetchInfraStatus,
+  fetchCommunityReport, fetchBuilderIntel,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -30,6 +31,10 @@ export default function ReportsPage() {
   const [approvalStats, setApprovalStats] = useState(null);
   const [contentPerf, setContentPerf] = useState({});
   const [intel, setIntel] = useState([]);
+  const [todayPainPoints, setTodayPainPoints] = useState(null);
+  const [infraStatus, setInfraStatus] = useState(null);
+  const [communityReport, setCommunityReport] = useState(null);
+  const [builderIntel, setBuilderIntel] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,6 +48,10 @@ export default function ReportsPage() {
         fetchHealthReport(),
         fetchApprovalStats(),
         fetchProductIntelligence(),
+        fetchPainPointsToday(),
+        fetchInfraStatus(),
+        fetchCommunityReport(7),
+        fetchBuilderIntel(1),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -55,10 +64,14 @@ export default function ReportsPage() {
       setHealth(val(5));
       setApprovalStats(val(6)?.stats || val(6));
       setIntel(val(7)?.recommendations || []);
+      setTodayPainPoints(val(8));
+      setInfraStatus(val(9));
+      setCommunityReport(val(10));
+      setBuilderIntel(val(11));
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[8 + i];
+        const r = results[12 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -231,10 +244,107 @@ export default function ReportsPage() {
         );
       })}
 
-      {/* ── 8. Pain Points ────────────────────────────── */}
+      {/* ── 8. Today's Pain Points ──────────────────── */}
       <div className="section">
         <div className="section-header">
-          <h2>Pain Points Detected</h2>
+          <h2>Today&apos;s Pain Points</h2>
+          <span className="text-sm text-muted">
+            {todayPainPoints ? `${todayPainPoints.total || 0} found · ${todayPainPoints.highScore || 0} high-score` : 'Loading...'}
+          </span>
+        </div>
+        {(!todayPainPoints || todayPainPoints.total === 0) ? (
+          <div className="card card-compact"><div className="text-sm text-muted">No pain points detected today. Agent runs at 5:30 AM ET.</div></div>
+        ) : (
+          <>
+            <div className="stats-row" style={{ marginBottom: 16 }}>
+              <StatBlock value={todayPainPoints.total} label="Total Found" />
+              <StatBlock value={todayPainPoints.highScore} label="Score 7+" color="var(--accent)" />
+              <StatBlock value={Object.keys(todayPainPoints.byProduct || {}).length} label="Products" />
+            </div>
+
+            {Object.entries(todayPainPoints.byProduct || {}).map(([productId, items]) => (
+              <div key={productId} style={{ marginBottom: 20 }}>
+                <h3 style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 8 }}>
+                  {PRODUCTS.find(p => p.id === productId)?.name || productId} ({items.length})
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {items.map((pp, i) => {
+                    const scoreBadge = pp.score >= 8 ? 'badge-green' : pp.score >= 6 ? 'badge-yellow' : 'badge-muted';
+                    const urgencyBadge = pp.urgency === 'critical' ? 'badge-red'
+                      : pp.urgency === 'high' ? 'badge-orange'
+                      : pp.urgency === 'medium' ? 'badge-yellow'
+                      : 'badge-muted';
+                    return (
+                      <div key={pp.id || i} className="card card-compact" style={{ margin: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div className="font-semibold text-sm" style={{ marginBottom: 2 }}>
+                              {pp.title || (pp.text || '').slice(0, 100)}
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                              <span className={`badge ${scoreBadge}`} style={{ fontSize: 10 }}>
+                                Score: {pp.score}/10
+                              </span>
+                              <span className={`badge ${urgencyBadge}`} style={{ fontSize: 10 }}>
+                                {pp.urgency || 'low'}
+                              </span>
+                              {pp.classification && (
+                                <span className="badge badge-purple" style={{ fontSize: 10 }}>
+                                  {(pp.classification || '').replace(/_/g, ' ')}
+                                </span>
+                              )}
+                              {pp.subreddit && (
+                                <span className="text-xs text-muted">{pp.subreddit}</span>
+                              )}
+                            </div>
+                          </div>
+                          {pp.source_url && (
+                            <a
+                              href={pp.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-sm"
+                              style={{ fontSize: 10, padding: '3px 8px', flexShrink: 0, marginLeft: 8, textDecoration: 'none' }}
+                            >
+                              View Post
+                            </a>
+                          )}
+                        </div>
+
+                        {pp.text && pp.text !== pp.title && (
+                          <p className="text-xs text-secondary" style={{ lineHeight: 1.5, maxHeight: 48, overflow: 'hidden', marginBottom: 6 }}>
+                            {pp.text.slice(0, 250)}{pp.text.length > 250 ? '...' : ''}
+                          </p>
+                        )}
+
+                        {pp.drafted_response && (
+                          <div style={{
+                            marginTop: 4, padding: '8px 12px',
+                            background: 'var(--bg)', borderRadius: 6,
+                            borderLeft: '3px solid var(--accent)',
+                          }}>
+                            <div className="text-xs text-muted font-semibold" style={{ marginBottom: 4 }}>
+                              Drafted Response {pp.response_mentions_product ? '(mentions product)' : ''}
+                            </div>
+                            <p className="text-xs text-secondary" style={{ lineHeight: 1.5, maxHeight: 60, overflow: 'hidden' }}>
+                              {pp.drafted_response.slice(0, 300)}{pp.drafted_response.length > 300 ? '...' : ''}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* ── 8b. Pain Points (30-day history) ───────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Pain Point History</h2>
           <span className="text-sm text-muted">Last 30 days</span>
         </div>
         {painPoints.length === 0 ? (
@@ -247,23 +357,32 @@ export default function ReportsPage() {
                   <tr>
                     <th>Signal</th>
                     <th>Product</th>
+                    <th>Score</th>
                     <th>Urgency</th>
                     <th>Source</th>
                     <th>Date</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {painPoints.slice(0, 15).map((pp, i) => {
+                  {painPoints.slice(0, 20).map((pp, i) => {
                     const urgencyBadge = pp.urgency === 'critical' ? 'badge-red'
                       : pp.urgency === 'high' ? 'badge-orange'
                       : pp.urgency === 'medium' ? 'badge-yellow'
                       : 'badge-muted';
+                    const scoreBadge = pp.score >= 8 ? 'badge-green' : pp.score >= 6 ? 'badge-yellow' : 'badge-muted';
                     return (
                       <tr key={pp.id || i}>
-                        <td className="text-sm">{pp.text || pp.description || pp.issue || '—'}</td>
-                        <td className="text-sm">{pp.product_relevance || pp.product || '—'}</td>
+                        <td className="text-sm">{pp.title || (pp.text || '').slice(0, 80) || '—'}</td>
+                        <td className="text-sm">{pp.product || pp.product_relevance || '—'}</td>
+                        <td><span className={`badge ${scoreBadge}`}>{pp.score || '—'}/10</span></td>
                         <td><span className={`badge ${urgencyBadge}`}>{pp.urgency || 'low'}</span></td>
-                        <td className="text-sm text-muted">{pp.source || '—'}</td>
+                        <td className="text-sm text-muted">
+                          {pp.source_url ? (
+                            <a href={pp.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                              {pp.subreddit || pp.source || 'link'}
+                            </a>
+                          ) : (pp.source || '—')}
+                        </td>
                         <td className="text-sm text-muted">
                           {pp.date_found ? new Date(pp.date_found).toLocaleDateString() : '—'}
                         </td>
@@ -312,7 +431,147 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* ── 10. QA Results ────────────────────────────── */}
+      {/* ── 10. Community Discovery ────────────────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Community Discovery</h2>
+          <span className="text-sm text-muted">
+            {communityReport ? `${communityReport.newCount || 0} new this week · ${communityReport.totalTracked || 0} total` : 'Loading...'}
+          </span>
+        </div>
+        {(!communityReport || communityReport.newCount === 0) ? (
+          <div className="card card-compact"><div className="text-sm text-muted">No new communities discovered this week. Full scan runs Monday 6 AM ET, Reddit daily at 5:45 AM ET.</div></div>
+        ) : (
+          <>
+            <div className="stats-row" style={{ marginBottom: 16 }}>
+              <StatBlock value={communityReport.newCount} label="New This Week" color="var(--accent)" />
+              <StatBlock value={communityReport.totalTracked} label="Total Tracked" />
+              {communityReport.byPlatformCount && Object.entries(communityReport.byPlatformCount).map(([platform, count]) => (
+                <StatBlock key={platform} value={count} label={platform.charAt(0).toUpperCase() + platform.slice(1)} />
+              ))}
+            </div>
+
+            {Object.entries(communityReport.byProduct || {}).map(([productId, platforms]) => (
+              <div key={productId} style={{ marginBottom: 20 }}>
+                <h3 style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 8 }}>
+                  {PRODUCTS.find(p => p.id === productId)?.name || productId}
+                </h3>
+                {Object.entries(platforms).map(([platform, communities]) => (
+                  <div key={platform} style={{ marginBottom: 12 }}>
+                    <div className="text-xs font-semibold" style={{ marginBottom: 6, textTransform: 'capitalize' }}>
+                      {platform} ({communities.length})
+                    </div>
+                    <div className="card card-compact" style={{ margin: 0 }}>
+                      <div className="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Community</th>
+                              <th>Members</th>
+                              <th>Score</th>
+                              <th>Rules</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {communities.slice(0, 10).map((c, i) => {
+                              const scoreBadge = c.overall_score >= 7 ? 'badge-green' : c.overall_score >= 4 ? 'badge-yellow' : 'badge-muted';
+                              const ruleBadge = c.rule_friendliness === 'promotion_friendly' ? 'badge-green'
+                                : c.rule_friendliness === 'limited_promotion' ? 'badge-yellow'
+                                : c.rule_friendliness === 'no_marketing' ? 'badge-red'
+                                : 'badge-muted';
+                              return (
+                                <tr key={c.id || i}>
+                                  <td className="text-sm">
+                                    {c.url ? (
+                                      <a href={c.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                                        {c.name}
+                                      </a>
+                                    ) : c.name}
+                                  </td>
+                                  <td className="text-sm">{c.subscriber_count?.toLocaleString() ?? '—'}</td>
+                                  <td><span className={`badge ${scoreBadge}`}>{c.overall_score}/10</span></td>
+                                  <td><span className={`badge ${ruleBadge}`} style={{ fontSize: 10 }}>{(c.rule_friendliness || 'unknown').replace(/_/g, ' ')}</span></td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* ── 11. Builder Community Intel ─────────────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Builder Community Intel</h2>
+          <span className="text-sm text-muted">
+            {builderIntel ? `${builderIntel.total || 0} signals today` : 'Loading...'}
+          </span>
+        </div>
+        {(!builderIntel || builderIntel.total === 0) ? (
+          <div className="card card-compact"><div className="text-sm text-muted">No builder intel today. Agent scans at 6:00 AM ET.</div></div>
+        ) : (
+          <>
+            <div className="stats-row" style={{ marginBottom: 16 }}>
+              <StatBlock value={builderIntel.total} label="Signals Found" color="var(--accent)" />
+              {builderIntel.byType && Object.entries(builderIntel.byType).slice(0, 4).map(([type, count]) => (
+                <StatBlock key={type} value={count} label={type.replace(/_/g, ' ')} />
+              ))}
+            </div>
+            <div className="card card-compact">
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Signal</th>
+                      <th>Type</th>
+                      <th>Product</th>
+                      <th>Score</th>
+                      <th>Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {builderIntel.items.slice(0, 15).map((item, i) => {
+                      const typeBadge = item.intel_type === 'competitive_signal' ? 'badge-red'
+                        : item.intel_type === 'feature_idea' ? 'badge-green'
+                        : item.intel_type === 'partnership_opportunity' ? 'badge-blue'
+                        : item.intel_type === 'marketing_tactic' ? 'badge-purple'
+                        : 'badge-yellow';
+                      const scoreBadge = item.relevance_score >= 7 ? 'badge-green' : item.relevance_score >= 4 ? 'badge-yellow' : 'badge-muted';
+                      return (
+                        <tr key={item.id || i}>
+                          <td className="text-sm" style={{ maxWidth: 300 }}>
+                            <div className="font-semibold">{item.title?.slice(0, 80) || '—'}</div>
+                            {item.summary && <div className="text-xs text-muted" style={{ marginTop: 2 }}>{item.summary.slice(0, 120)}</div>}
+                          </td>
+                          <td><span className={`badge ${typeBadge}`} style={{ fontSize: 10 }}>{(item.intel_type || '').replace(/_/g, ' ')}</span></td>
+                          <td className="text-sm">{PRODUCTS.find(p => p.id === item.product_relevance)?.name || item.product_relevance}</td>
+                          <td><span className={`badge ${scoreBadge}`}>{item.relevance_score}/10</span></td>
+                          <td className="text-sm">
+                            {item.source_url ? (
+                              <a href={item.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                                {item.source || 'link'}
+                              </a>
+                            ) : (item.source || '—')}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── 12. QA Results ────────────────────────────── */}
       {report.qa && (
         <div className="section">
           <div className="section-header"><h2>QA Results</h2></div>
@@ -327,53 +586,96 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* ── 11. Infrastructure Health ─────────────────── */}
-      {health && (
-        <div className="section">
-          <div className="section-header"><h2>Infrastructure Health</h2></div>
-          <div className="stats-row">
-            <StatBlock
-              value={health.unresolvedAlerts?.length ?? infraHealth.unresolvedAlerts ?? 0}
-              label="Unresolved Alerts"
-              color={health.criticalAlerts > 0 ? 'var(--red)' : 'var(--green)'}
-            />
-            <StatBlock
-              value={health.criticalAlerts ?? infraHealth.criticalAlerts ?? 0}
-              label="Critical Alerts"
-              color="var(--red)"
-            />
-          </div>
-
-          {health.unresolvedAlerts?.length > 0 && (
-            <div className="card card-compact">
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Alert</th>
-                      <th>Severity</th>
-                      <th>Service</th>
-                      <th>Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {health.unresolvedAlerts.map((alert, i) => (
-                      <tr key={alert.id || i}>
-                        <td className="text-sm">{alert.message}</td>
-                        <td><span className={`badge ${alert.severity === 'critical' ? 'badge-red' : alert.severity === 'warning' ? 'badge-yellow' : 'badge-muted'}`}>{alert.severity}</span></td>
-                        <td className="text-sm">{alert.service}</td>
-                        <td className="text-sm text-muted">{alert.created_at ? new Date(alert.created_at).toLocaleString() : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+      {/* ── 13. Infrastructure Health ─────────────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Infrastructure Health</h2>
+          <a href="/infrastructure" className="btn btn-sm" style={{ textDecoration: 'none', fontSize: 11 }}>View Details</a>
         </div>
-      )}
 
-      {/* ── 12. Lifecycle & Inbox ─────────────────────── */}
+        {(() => {
+          const infraServices = infraStatus?.services || [];
+          const infraAlerts = infraStatus?.unresolvedAlerts ?? (health?.unresolvedAlerts?.length ?? infraHealth.unresolvedAlerts ?? 0);
+          const infraOverall = infraStatus?.overall || 'unknown';
+          const overallColor = infraOverall === 'healthy' ? 'var(--green)' : infraOverall === 'warning' ? 'var(--yellow)' : infraOverall === 'critical' ? 'var(--red)' : 'var(--text-muted)';
+
+          return (
+            <>
+              <div className="stats-row">
+                <StatBlock
+                  value={infraOverall.charAt(0).toUpperCase() + infraOverall.slice(1)}
+                  label="Overall Status"
+                  color={overallColor}
+                />
+                <StatBlock value={infraServices.length || '—'} label="Services" />
+                <StatBlock
+                  value={infraAlerts}
+                  label="Active Alerts"
+                  color={infraAlerts > 0 ? 'var(--red)' : 'var(--green)'}
+                />
+                <StatBlock
+                  value={health?.criticalAlerts ?? infraHealth.criticalAlerts ?? 0}
+                  label="Critical"
+                  color="var(--red)"
+                />
+              </div>
+
+              {infraServices.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginTop: 12 }}>
+                  {infraServices.map(svc => {
+                    const dotColor = svc.status === 'healthy' ? 'var(--green)'
+                      : svc.status === 'warning' ? 'var(--yellow)'
+                      : svc.status === 'critical' || svc.status === 'error' ? 'var(--red)'
+                      : 'var(--text-muted)';
+                    return (
+                      <div key={svc.service} className="card card-compact" style={{ margin: 0, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+                          background: dotColor, flexShrink: 0,
+                          boxShadow: svc.status === 'critical' ? `0 0 6px ${dotColor}` : undefined,
+                        }} />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="text-sm font-semibold" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{svc.service}</div>
+                          <div className="text-xs text-muted">{svc.response_time_ms != null ? `${svc.response_time_ms}ms` : svc.status}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {health?.unresolvedAlerts?.length > 0 && (
+                <div className="card card-compact" style={{ marginTop: 12 }}>
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Alert</th>
+                          <th>Severity</th>
+                          <th>Service</th>
+                          <th>Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {health.unresolvedAlerts.map((alert, i) => (
+                          <tr key={alert.id || i}>
+                            <td className="text-sm">{alert.message}</td>
+                            <td><span className={`badge ${alert.severity === 'critical' ? 'badge-red' : alert.severity === 'warning' ? 'badge-yellow' : 'badge-muted'}`}>{alert.severity}</span></td>
+                            <td className="text-sm">{alert.service}</td>
+                            <td className="text-sm text-muted">{alert.created_at ? new Date(alert.created_at).toLocaleString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
+      </div>
+
+      {/* ── 14. Lifecycle & Inbox ─────────────────────── */}
       <div className="section">
         <div className="section-header"><h2>Operations Summary</h2></div>
         <div className="grid-2">

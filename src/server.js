@@ -15,6 +15,9 @@ const tmdbRoutes = require('./dashboard/routes/tmdb');
 const quizRoutes = require('./dashboard/routes/quiz');
 const lifeManagerRoutes = require('./dashboard/routes/life-manager');
 const booksRoutes = require('./dashboard/routes/books');
+const releasesRoutes = require('./dashboard/routes/releases');
+const infrastructureRoutes = require('./dashboard/routes/infrastructure');
+const calendarRoutes = require('./dashboard/routes/calendar');
 
 const app = express();
 
@@ -101,6 +104,9 @@ app.use('/api/tmdb', tmdbRoutes); // TMDB browse/rate with cascade scoring
 app.use('/api/quiz', quizRoutes); // Profile quiz with 200+ questions
 app.use('/api/life', lifeManagerRoutes); // Life Manager: routines, family log, streaks
 app.use('/api/books', booksRoutes); // Books: discover, rate, author cascade
+app.use('/api/releases', releasesRoutes); // Releases: weekly TMDB digest with personalization
+app.use('/api/infrastructure', infrastructureRoutes); // Infrastructure: status, uptime, alerts
+app.use('/api/calendar', requireSupabase, calendarRoutes); // Content calendar: weekly schedule
 
 // API info
 app.get('/api', (_req, res) => {

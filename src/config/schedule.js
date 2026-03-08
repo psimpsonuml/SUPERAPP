@@ -10,7 +10,9 @@ const schedule = {
   daily: [
     { agentId: 'qa-playtest', cron: '0 0 * * *', description: 'Nightly ChronoStates test cycle' },
     { agentId: 'pain-point-hunter', cron: '30 5 * * *', description: 'Morning community scan' },
-    { agentId: 'seo-aeo-writer', cron: '0 6 * * *', description: 'Generate 3 blog posts + repurposing chain' },
+    { agentId: 'community-scout', cron: '45 5 * * *', description: 'Daily Reddit community scan', options: { redditOnly: true } },
+    { agentId: 'builder-community', cron: '0 6 * * *', description: 'Builder intel scan + promo rotation' },
+    { agentId: 'seo-aeo-writer', cron: '15 6 * * *', description: 'Generate 3 blog posts + repurposing chain' },
     { agentId: 'substack-publisher', cron: '0 7 * * *', description: 'Generate paywalled newsletter' },
     { agentId: 'social-distributor', cron: '30 7 * * *', description: 'Prepare daily social posts' },
     { agentId: 'video-producer', cron: '0 8 * * *', description: 'Daily video production pipeline' },
