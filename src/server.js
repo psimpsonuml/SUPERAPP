@@ -10,6 +10,7 @@ const approvalRoutes = require('./dashboard/routes/approval');
 const agentRoutes = require('./dashboard/routes/agents');
 const settingsRoutes = require('./dashboard/routes/settings');
 const reportRoutes = require('./dashboard/routes/reports');
+const personalRoutes = require('./dashboard/routes/personal');
 
 const app = express();
 
@@ -91,6 +92,7 @@ app.use('/api/approval', requireSupabase, approvalRoutes);
 app.use('/api/agents', agentRoutes); // agents has its own graceful fallback
 app.use('/api/settings', requireSupabase, settingsRoutes);
 app.use('/api/reports', requireSupabase, reportRoutes);
+app.use('/api/personal', personalRoutes); // personal module has its own graceful fallback
 
 // API info
 app.get('/api', (_req, res) => {

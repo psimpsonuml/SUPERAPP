@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import {
   fetchSlider, updateSlider, updateReducedOps,
-  fetchSettings, fetchBrandProfiles,
+  fetchSettings, fetchBrandProfiles, fetchSendingDomains,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -62,6 +62,7 @@ export default function SettingsPage() {
   const [reducedOps, setReducedOps] = useState(false);
   const [settings, setSettings] = useState(null);
   const [brandProfiles, setBrandProfiles] = useState([]);
+  const [domains, setDomains] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -73,6 +74,7 @@ export default function SettingsPage() {
           fetchSlider(),
           fetchSettings(),
           fetchBrandProfiles(),
+          fetchSendingDomains(),
         ]);
         if (results[0].status === 'fulfilled') {
           const pos = results[0].value.sliderPosition ?? 60;
@@ -86,6 +88,9 @@ export default function SettingsPage() {
         }
         if (results[2].status === 'fulfilled') {
           setBrandProfiles(results[2].value.profiles || []);
+        }
+        if (results[3].status === 'fulfilled') {
+          setDomains(results[3].value.domains || []);
         }
       } catch (err) {
         setError(err.message);
@@ -134,6 +139,7 @@ export default function SettingsPage() {
   const TABS = [
     { id: 'automation', label: 'Automation' },
     { id: 'brand', label: 'Brand Voice' },
+    { id: 'domains', label: 'Sending Domains' },
     { id: 'account', label: 'Account' },
   ];
 
@@ -405,6 +411,106 @@ export default function SettingsPage() {
                 </div>
               );
             })
+          )}
+        </>
+      )}
+
+      {/* ── Sending Domains Tab ─────────────────────────── */}
+      {tab === 'domains' && (
+        <>
+          {domains.length === 0 ? (
+            <div className="card">
+              <div className="empty-state">
+                <div className="empty-state-icon">@</div>
+                <p>No sending domains configured yet.</p>
+                <p className="text-sm text-muted mt-2">
+                  Add 5 outreach domains via the API or Supabase to enable email infrastructure.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="stats-row">
+                <div className="stat-card">
+                  <div className="stat-value">{domains.length}</div>
+                  <div className="stat-label">Total Domains</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value" style={{ color: 'var(--green)' }}>
+                    {domains.filter(d => d.warmup_status === 'ready' || d.warmup_status === 'completed').length}
+                  </div>
+                  <div className="stat-label">Ready</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value" style={{ color: 'var(--yellow)' }}>
+                    {domains.filter(d => d.warmup_status === 'warming').length}
+                  </div>
+                  <div className="stat-label">Warming Up</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value" style={{ color: 'var(--red)' }}>
+                    {domains.filter(d => d.blacklisted).length}
+                  </div>
+                  <div className="stat-label">Blacklisted</div>
+                </div>
+              </div>
+
+              {domains.map((domain) => {
+                const repScore = domain.reputation_score || 0;
+                const repColor = repScore >= 80 ? 'var(--green)' : repScore >= 50 ? 'var(--yellow)' : 'var(--red)';
+                const statusBadge = domain.blacklisted ? 'badge-red'
+                  : domain.warmup_status === 'ready' || domain.warmup_status === 'completed' ? 'badge-green'
+                  : domain.warmup_status === 'warming' ? 'badge-yellow'
+                  : 'badge-muted';
+
+                return (
+                  <div key={domain.id} className="card card-compact" style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <div>
+                        <div className="font-semibold">{domain.domain}</div>
+                        <div className="text-xs text-muted mt-1">
+                          {domain.mailbox_count || 1} mailbox{(domain.mailbox_count || 1) !== 1 ? 'es' : ''}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {domain.blacklisted && <span className="badge badge-red">Blacklisted</span>}
+                        <span className={`badge ${statusBadge}`}>{domain.warmup_status || 'pending'}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                      <div>
+                        <div className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>Reputation</div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="domain-bar-track" style={{ flex: 1 }}>
+                            <div className="domain-bar-fill" style={{ width: `${repScore}%`, background: repColor }} />
+                          </div>
+                          <span className="text-sm font-semibold" style={{ color: repColor }}>{repScore}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>Daily Volume</div>
+                        <div className="text-sm font-medium mt-1">
+                          {domain.daily_volume || 0} / {domain.max_daily_volume || 10}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>Warmup Started</div>
+                        <div className="text-sm mt-1">
+                          {domain.warmup_started_at ? new Date(domain.warmup_started_at).toLocaleDateString() : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>Last Checked</div>
+                        <div className="text-sm mt-1">
+                          {domain.last_checked ? new Date(domain.last_checked).toLocaleDateString() : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
           )}
         </>
       )}
