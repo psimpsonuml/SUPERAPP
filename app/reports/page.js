@@ -5,7 +5,7 @@ import {
   fetchDailyReport, fetchPainPoints, fetchPainPointsToday, fetchPipeline,
   fetchAgents, fetchHealthReport, fetchContentPerformance,
   fetchProductIntelligence, fetchApprovalStats, fetchInfraStatus,
-  fetchCommunityReport, fetchBuilderIntel,
+  fetchCommunityReport, fetchBuilderIntel, fetchSeoPostsToday,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -35,6 +35,7 @@ export default function ReportsPage() {
   const [infraStatus, setInfraStatus] = useState(null);
   const [communityReport, setCommunityReport] = useState(null);
   const [builderIntel, setBuilderIntel] = useState(null);
+  const [seoPosts, setSeoPosts] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export default function ReportsPage() {
         fetchInfraStatus(),
         fetchCommunityReport(7),
         fetchBuilderIntel(1),
+        fetchSeoPostsToday(),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -68,10 +70,11 @@ export default function ReportsPage() {
       setInfraStatus(val(9));
       setCommunityReport(val(10));
       setBuilderIntel(val(11));
+      setSeoPosts(val(12));
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[12 + i];
+        const r = results[13 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -147,6 +150,70 @@ export default function ReportsPage() {
             );
           })}
         </div>
+      </div>
+
+      {/* ── 3b. Content Generation (SEO/AEO) ────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Content Generation</h2>
+          <span className="text-sm text-muted">
+            {seoPosts ? `${seoPosts.total || 0} posts today` : 'Loading...'}
+          </span>
+        </div>
+        {(!seoPosts || seoPosts.total === 0) ? (
+          <div className="card card-compact"><div className="text-sm text-muted">No blog posts generated today. SEO/AEO Writer runs at 6:15 AM ET.</div></div>
+        ) : (
+          <>
+            <div className="stats-row" style={{ marginBottom: 16 }}>
+              <StatBlock value={seoPosts.total} label="Posts Generated" color="var(--accent)" />
+              {PRODUCTS.map(p => (
+                <StatBlock key={p.id} value={seoPosts.byProduct?.[p.id] || 0} label={p.name} />
+              ))}
+            </div>
+            <div className="card card-compact">
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Product</th>
+                      <th>Keyword</th>
+                      <th>Words</th>
+                      <th>FAQ</th>
+                      <th>Approval</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {seoPosts.posts.map((post, i) => {
+                      const statusBadge = post.status === 'approved' ? 'badge-green'
+                        : post.status === 'pending' ? 'badge-yellow'
+                        : post.status === 'rejected' ? 'badge-red'
+                        : 'badge-muted';
+                      const tierBadge = post.approvalTier === 1 ? 'badge-green' : 'badge-yellow';
+                      return (
+                        <tr key={post.id || i}>
+                          <td className="text-sm font-semibold" style={{ maxWidth: 280 }}>
+                            {post.title || '—'}
+                            {post.metaTitle && post.metaTitle !== post.title && (
+                              <div className="text-xs text-muted" style={{ marginTop: 2 }}>Meta: {post.metaTitle}</div>
+                            )}
+                          </td>
+                          <td className="text-sm">{PRODUCTS.find(p => p.id === post.product)?.name || post.product}</td>
+                          <td><span className="badge badge-purple" style={{ fontSize: 10 }}>{post.keyword || '—'}</span></td>
+                          <td className="text-sm">{post.wordCount ? post.wordCount.toLocaleString() : '—'}</td>
+                          <td className="text-sm">{post.hasFaqSchema ? '✓' : '—'}</td>
+                          <td><span className={`badge ${tierBadge}`} style={{ fontSize: 10 }}>Tier {post.approvalTier || '?'}</span></td>
+                          <td><span className={`badge ${statusBadge}`}>{post.status || 'unknown'}</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── 4. Agent Activity ─────────────────────────── */}

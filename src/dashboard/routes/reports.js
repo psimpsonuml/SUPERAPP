@@ -195,6 +195,47 @@ router.get('/communities', async (req, res) => {
   }
 });
 
+// GET /api/reports/seo-posts-today — today's SEO/AEO posts from content_memory
+router.get('/seo-posts-today', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data } = await supabase
+      .from('content_memory')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .eq('content_type', 'blog_post')
+      .gte('created_at', todayStart.toISOString())
+      .order('created_at', { ascending: true });
+
+    const posts = (data || []).map(post => ({
+      id: post.id,
+      product: post.product,
+      title: post.title,
+      keyword: post.metadata?.keyword || null,
+      wordCount: post.metadata?.wordCount || null,
+      approvalTier: post.metadata?.approvalTier || null,
+      status: post.status,
+      hasFaqSchema: !!post.metadata?.faqSchema,
+      metaTitle: post.metadata?.metaTitle || null,
+      createdAt: post.created_at,
+    }));
+
+    res.json({
+      total: posts.length,
+      posts,
+      byProduct: posts.reduce((acc, p) => {
+        acc[p.product] = (acc[p.product] || 0) + 1;
+        return acc;
+      }, {}),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/reports/builder-intel — today's builder community intel
 router.get('/builder-intel', async (req, res) => {
   try {
