@@ -146,4 +146,53 @@ router.get('/product-intelligence', async (req, res) => {
   }
 });
 
+// GET /api/reports/communities — community discovery report (recent + all)
+router.get('/communities', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const days = parseInt(req.query.days, 10) || 7;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    // Newly discovered communities
+    const { data: recent } = await supabase
+      .from('community_profiles')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .gte('created_at', since.toISOString())
+      .order('overall_score', { ascending: false });
+
+    // Group by product then platform
+    const byProduct = {};
+    for (const c of (recent || [])) {
+      if (!byProduct[c.product]) byProduct[c.product] = {};
+      if (!byProduct[c.product][c.platform]) byProduct[c.product][c.platform] = [];
+      byProduct[c.product][c.platform].push(c);
+    }
+
+    // Summary stats
+    const { data: allCommunities } = await supabase
+      .from('community_profiles')
+      .select('id, platform, product, overall_score')
+      .eq('account_id', req.accountId);
+
+    const total = (allCommunities || []).length;
+    const byPlatformCount = {};
+    for (const c of (allCommunities || [])) {
+      byPlatformCount[c.platform] = (byPlatformCount[c.platform] || 0) + 1;
+    }
+
+    res.json({
+      days,
+      newCount: (recent || []).length,
+      totalTracked: total,
+      byPlatformCount,
+      byProduct,
+      recent: recent || [],
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

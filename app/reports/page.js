@@ -5,6 +5,7 @@ import {
   fetchDailyReport, fetchPainPoints, fetchPainPointsToday, fetchPipeline,
   fetchAgents, fetchHealthReport, fetchContentPerformance,
   fetchProductIntelligence, fetchApprovalStats, fetchInfraStatus,
+  fetchCommunityReport,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -32,6 +33,7 @@ export default function ReportsPage() {
   const [intel, setIntel] = useState([]);
   const [todayPainPoints, setTodayPainPoints] = useState(null);
   const [infraStatus, setInfraStatus] = useState(null);
+  const [communityReport, setCommunityReport] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export default function ReportsPage() {
         fetchProductIntelligence(),
         fetchPainPointsToday(),
         fetchInfraStatus(),
+        fetchCommunityReport(7),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -61,10 +64,11 @@ export default function ReportsPage() {
       setIntel(val(7)?.recommendations || []);
       setTodayPainPoints(val(8));
       setInfraStatus(val(9));
+      setCommunityReport(val(10));
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[10 + i];
+        const r = results[11 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -424,7 +428,82 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* ── 10. QA Results ────────────────────────────── */}
+      {/* ── 10. Community Discovery ────────────────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Community Discovery</h2>
+          <span className="text-sm text-muted">
+            {communityReport ? `${communityReport.newCount || 0} new this week · ${communityReport.totalTracked || 0} total` : 'Loading...'}
+          </span>
+        </div>
+        {(!communityReport || communityReport.newCount === 0) ? (
+          <div className="card card-compact"><div className="text-sm text-muted">No new communities discovered this week. Full scan runs Monday 6 AM ET, Reddit daily at 5:45 AM ET.</div></div>
+        ) : (
+          <>
+            <div className="stats-row" style={{ marginBottom: 16 }}>
+              <StatBlock value={communityReport.newCount} label="New This Week" color="var(--accent)" />
+              <StatBlock value={communityReport.totalTracked} label="Total Tracked" />
+              {communityReport.byPlatformCount && Object.entries(communityReport.byPlatformCount).map(([platform, count]) => (
+                <StatBlock key={platform} value={count} label={platform.charAt(0).toUpperCase() + platform.slice(1)} />
+              ))}
+            </div>
+
+            {Object.entries(communityReport.byProduct || {}).map(([productId, platforms]) => (
+              <div key={productId} style={{ marginBottom: 20 }}>
+                <h3 style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 8 }}>
+                  {PRODUCTS.find(p => p.id === productId)?.name || productId}
+                </h3>
+                {Object.entries(platforms).map(([platform, communities]) => (
+                  <div key={platform} style={{ marginBottom: 12 }}>
+                    <div className="text-xs font-semibold" style={{ marginBottom: 6, textTransform: 'capitalize' }}>
+                      {platform} ({communities.length})
+                    </div>
+                    <div className="card card-compact" style={{ margin: 0 }}>
+                      <div className="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Community</th>
+                              <th>Members</th>
+                              <th>Score</th>
+                              <th>Rules</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {communities.slice(0, 10).map((c, i) => {
+                              const scoreBadge = c.overall_score >= 7 ? 'badge-green' : c.overall_score >= 4 ? 'badge-yellow' : 'badge-muted';
+                              const ruleBadge = c.rule_friendliness === 'promotion_friendly' ? 'badge-green'
+                                : c.rule_friendliness === 'limited_promotion' ? 'badge-yellow'
+                                : c.rule_friendliness === 'no_marketing' ? 'badge-red'
+                                : 'badge-muted';
+                              return (
+                                <tr key={c.id || i}>
+                                  <td className="text-sm">
+                                    {c.url ? (
+                                      <a href={c.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                                        {c.name}
+                                      </a>
+                                    ) : c.name}
+                                  </td>
+                                  <td className="text-sm">{c.subscriber_count?.toLocaleString() ?? '—'}</td>
+                                  <td><span className={`badge ${scoreBadge}`}>{c.overall_score}/10</span></td>
+                                  <td><span className={`badge ${ruleBadge}`} style={{ fontSize: 10 }}>{(c.rule_friendliness || 'unknown').replace(/_/g, ' ')}</span></td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* ── 11. QA Results ────────────────────────────── */}
       {report.qa && (
         <div className="section">
           <div className="section-header"><h2>QA Results</h2></div>
@@ -439,7 +518,7 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* ── 11. Infrastructure Health ─────────────────── */}
+      {/* ── 12. Infrastructure Health ─────────────────── */}
       <div className="section">
         <div className="section-header">
           <h2>Infrastructure Health</h2>
@@ -528,7 +607,7 @@ export default function ReportsPage() {
         })()}
       </div>
 
-      {/* ── 12. Lifecycle & Inbox ─────────────────────── */}
+      {/* ── 13. Lifecycle & Inbox ─────────────────────── */}
       <div className="section">
         <div className="section-header"><h2>Operations Summary</h2></div>
         <div className="grid-2">
