@@ -195,4 +195,39 @@ router.get('/communities', async (req, res) => {
   }
 });
 
+// GET /api/reports/builder-intel — today's builder community intel
+router.get('/builder-intel', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const days = parseInt(req.query.days, 10) || 1;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
+
+    const { data } = await supabase
+      .from('builder_intel')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .gte('date_found', since.toISOString())
+      .order('relevance_score', { ascending: false });
+
+    // Group by intel type
+    const byType = {};
+    const byProduct = {};
+    for (const item of (data || [])) {
+      byType[item.intel_type] = (byType[item.intel_type] || 0) + 1;
+      byProduct[item.product_relevance] = (byProduct[item.product_relevance] || 0) + 1;
+    }
+
+    res.json({
+      total: (data || []).length,
+      byType,
+      byProduct,
+      items: data || [],
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

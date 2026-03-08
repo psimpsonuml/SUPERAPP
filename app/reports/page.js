@@ -5,7 +5,7 @@ import {
   fetchDailyReport, fetchPainPoints, fetchPainPointsToday, fetchPipeline,
   fetchAgents, fetchHealthReport, fetchContentPerformance,
   fetchProductIntelligence, fetchApprovalStats, fetchInfraStatus,
-  fetchCommunityReport,
+  fetchCommunityReport, fetchBuilderIntel,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -34,6 +34,7 @@ export default function ReportsPage() {
   const [todayPainPoints, setTodayPainPoints] = useState(null);
   const [infraStatus, setInfraStatus] = useState(null);
   const [communityReport, setCommunityReport] = useState(null);
+  const [builderIntel, setBuilderIntel] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export default function ReportsPage() {
         fetchPainPointsToday(),
         fetchInfraStatus(),
         fetchCommunityReport(7),
+        fetchBuilderIntel(1),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -65,10 +67,11 @@ export default function ReportsPage() {
       setTodayPainPoints(val(8));
       setInfraStatus(val(9));
       setCommunityReport(val(10));
+      setBuilderIntel(val(11));
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[11 + i];
+        const r = results[12 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -503,7 +506,72 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* ── 11. QA Results ────────────────────────────── */}
+      {/* ── 11. Builder Community Intel ─────────────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Builder Community Intel</h2>
+          <span className="text-sm text-muted">
+            {builderIntel ? `${builderIntel.total || 0} signals today` : 'Loading...'}
+          </span>
+        </div>
+        {(!builderIntel || builderIntel.total === 0) ? (
+          <div className="card card-compact"><div className="text-sm text-muted">No builder intel today. Agent scans at 6:00 AM ET.</div></div>
+        ) : (
+          <>
+            <div className="stats-row" style={{ marginBottom: 16 }}>
+              <StatBlock value={builderIntel.total} label="Signals Found" color="var(--accent)" />
+              {builderIntel.byType && Object.entries(builderIntel.byType).slice(0, 4).map(([type, count]) => (
+                <StatBlock key={type} value={count} label={type.replace(/_/g, ' ')} />
+              ))}
+            </div>
+            <div className="card card-compact">
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Signal</th>
+                      <th>Type</th>
+                      <th>Product</th>
+                      <th>Score</th>
+                      <th>Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {builderIntel.items.slice(0, 15).map((item, i) => {
+                      const typeBadge = item.intel_type === 'competitive_signal' ? 'badge-red'
+                        : item.intel_type === 'feature_idea' ? 'badge-green'
+                        : item.intel_type === 'partnership_opportunity' ? 'badge-blue'
+                        : item.intel_type === 'marketing_tactic' ? 'badge-purple'
+                        : 'badge-yellow';
+                      const scoreBadge = item.relevance_score >= 7 ? 'badge-green' : item.relevance_score >= 4 ? 'badge-yellow' : 'badge-muted';
+                      return (
+                        <tr key={item.id || i}>
+                          <td className="text-sm" style={{ maxWidth: 300 }}>
+                            <div className="font-semibold">{item.title?.slice(0, 80) || '—'}</div>
+                            {item.summary && <div className="text-xs text-muted" style={{ marginTop: 2 }}>{item.summary.slice(0, 120)}</div>}
+                          </td>
+                          <td><span className={`badge ${typeBadge}`} style={{ fontSize: 10 }}>{(item.intel_type || '').replace(/_/g, ' ')}</span></td>
+                          <td className="text-sm">{PRODUCTS.find(p => p.id === item.product_relevance)?.name || item.product_relevance}</td>
+                          <td><span className={`badge ${scoreBadge}`}>{item.relevance_score}/10</span></td>
+                          <td className="text-sm">
+                            {item.source_url ? (
+                              <a href={item.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                                {item.source || 'link'}
+                              </a>
+                            ) : (item.source || '—')}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── 12. QA Results ────────────────────────────── */}
       {report.qa && (
         <div className="section">
           <div className="section-header"><h2>QA Results</h2></div>
@@ -518,7 +586,7 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* ── 12. Infrastructure Health ─────────────────── */}
+      {/* ── 13. Infrastructure Health ─────────────────── */}
       <div className="section">
         <div className="section-header">
           <h2>Infrastructure Health</h2>
@@ -607,7 +675,7 @@ export default function ReportsPage() {
         })()}
       </div>
 
-      {/* ── 13. Lifecycle & Inbox ─────────────────────── */}
+      {/* ── 14. Lifecycle & Inbox ─────────────────────── */}
       <div className="section">
         <div className="section-header"><h2>Operations Summary</h2></div>
         <div className="grid-2">
