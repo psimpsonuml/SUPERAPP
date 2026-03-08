@@ -11,6 +11,7 @@ const agentRoutes = require('./dashboard/routes/agents');
 const settingsRoutes = require('./dashboard/routes/settings');
 const reportRoutes = require('./dashboard/routes/reports');
 const personalRoutes = require('./dashboard/routes/personal');
+const tmdbRoutes = require('./dashboard/routes/tmdb');
 
 const app = express();
 
@@ -93,6 +94,7 @@ app.use('/api/agents', agentRoutes); // agents has its own graceful fallback
 app.use('/api/settings', requireSupabase, settingsRoutes);
 app.use('/api/reports', requireSupabase, reportRoutes);
 app.use('/api/personal', personalRoutes); // personal module has its own graceful fallback
+app.use('/api/tmdb', tmdbRoutes); // TMDB browse/rate with cascade scoring
 
 // API info
 app.get('/api', (_req, res) => {
