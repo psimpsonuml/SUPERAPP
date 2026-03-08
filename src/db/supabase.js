@@ -15,4 +15,8 @@ function getSupabase() {
   return supabaseClient;
 }
 
-module.exports = { getSupabase };
+function isSupabaseConfigured() {
+  return !!(config.supabase.url && config.supabase.serviceKey);
+}
+
+module.exports = { getSupabase, isSupabaseConfigured };
