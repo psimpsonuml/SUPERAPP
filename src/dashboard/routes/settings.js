@@ -20,6 +20,30 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/settings/slider — get current slider position
+router.get('/slider', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('accounts')
+      .select('slider_position')
+      .eq('id', req.accountId)
+      .single();
+
+    if (error) return res.status(404).json({ error: 'Account not found' });
+
+    const pos = data.slider_position;
+    const label = pos <= 25 ? 'Maximum oversight'
+      : pos <= 50 ? 'Cautious'
+      : pos <= 75 ? 'Balanced'
+      : 'Aggressive';
+
+    res.json({ sliderPosition: pos, label });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // PATCH /api/settings/slider — update automation slider
 router.patch('/slider', async (req, res) => {
   try {
