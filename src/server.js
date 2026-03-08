@@ -126,10 +126,12 @@ app.use((_req, res) => {
   });
 });
 
-// Start server
-const port = config.port;
-app.listen(port, () => {
-  logger.info(`BeaconOps dashboard server running on port ${port}`);
-});
+// Start server (only when run directly, not on Vercel)
+if (!process.env.VERCEL) {
+  const port = config.port;
+  app.listen(port, () => {
+    logger.info(`BeaconOps dashboard server running on port ${port}`);
+  });
+}
 
 module.exports = app;
