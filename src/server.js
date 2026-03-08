@@ -62,8 +62,9 @@ app.use(express.json());
 
 // Account context middleware — sets accountId for multi-tenant isolation
 // In production, this would extract from JWT/session; for personal use, uses default account
+const DEFAULT_ACCOUNT_UUID = '00000000-0000-0000-0000-000000000001';
 app.use('/api', (req, _res, next) => {
-  req.accountId = req.headers['x-account-id'] || process.env.DEFAULT_ACCOUNT_ID || 'default';
+  req.accountId = req.headers['x-account-id'] || process.env.DEFAULT_ACCOUNT_ID || DEFAULT_ACCOUNT_UUID;
   next();
 });
 
