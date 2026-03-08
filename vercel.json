@@ -4,12 +4,17 @@
     {
       "src": "src/server.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
     }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "src/server.js"
-    }
+    { "src": "/api/(.*)", "dest": "src/server.js" },
+    { "src": "/health", "dest": "src/server.js" },
+    { "src": "/auth/(.*)", "dest": "src/server.js" },
+    { "src": "/billing/(.*)", "dest": "src/server.js" },
+    { "src": "/(.*)", "dest": "package.json" }
   ]
 }
