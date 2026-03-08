@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
@@ -46,17 +47,34 @@ function NavIcon({ d }) {
   );
 }
 
+function CollapseIcon({ collapsed }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      style={{ transition: 'transform 0.3s', transform: collapsed ? 'rotate(180deg)' : 'none' }}>
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${collapsed ? ' sidebar-collapsed' : ''}`}>
       <div className="sidebar-brand">
         <div className="sidebar-logo">B</div>
         <div>
           <div className="sidebar-title">BeaconOps</div>
           <div className="sidebar-subtitle">Control Center</div>
         </div>
+        <button
+          className="sidebar-collapse-btn"
+          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <CollapseIcon collapsed={collapsed} />
+        </button>
       </div>
 
       <nav className="sidebar-nav">
@@ -74,6 +92,7 @@ export default function Sidebar() {
                   key={item.href}
                   href={item.href}
                   className={`sidebar-link${active ? ' sidebar-link-active' : ''}`}
+                  title={collapsed ? item.label : undefined}
                 >
                   <NavIcon d={item.icon} />
                   <span>{item.label}</span>
