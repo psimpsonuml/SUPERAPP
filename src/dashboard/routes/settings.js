@@ -139,4 +139,20 @@ router.put('/brand-profiles/:product', async (req, res) => {
   }
 });
 
+// GET /api/settings/sending-domains — get outreach domain status
+router.get('/sending-domains', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from('sending_domains')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .order('created_at', { ascending: true });
+
+    res.json({ domains: data || [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

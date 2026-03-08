@@ -86,7 +86,7 @@ export default function AgentsPage() {
   if (error) return <div className="error-state">Error: {error}</div>;
 
   const categories = filterCategory === 'all'
-    ? ['continuous', 'daily', 'weekly', 'event']
+    ? ['continuous', 'daily', 'weekly', 'event', 'on-demand']
     : [filterCategory];
 
   const totalAgents = AGENTS.length;
@@ -148,12 +148,17 @@ export default function AgentsPage() {
       {categories.map((cat) => {
         const catAgents = AGENTS.filter((a) => a.category === cat);
         if (catAgents.length === 0) return null;
+        const bizAgents = catAgents.filter((a) => a.module === 'business');
+        const persAgents = catAgents.filter((a) => a.module === 'personal');
 
         return (
           <div key={cat} className="section">
             <div className="section-header">
               <h2>{CATEGORY_LABELS[cat]}</h2>
-              <span className="text-sm text-muted">{catAgents.length} agent{catAgents.length !== 1 ? 's' : ''}</span>
+              <span className="text-sm text-muted">
+                {catAgents.length} agent{catAgents.length !== 1 ? 's' : ''}
+                {bizAgents.length > 0 && persAgents.length > 0 && ` (${bizAgents.length} business, ${persAgents.length} personal)`}
+              </span>
             </div>
 
             <div className="agent-grid">
@@ -176,6 +181,9 @@ export default function AgentsPage() {
                           {agentMeta.name}
                           {agentMeta.essential && (
                             <span className="badge badge-cyan" style={{ fontSize: 9 }}>Essential</span>
+                          )}
+                          {agentMeta.module === 'personal' && (
+                            <span className="badge badge-muted" style={{ fontSize: 9 }}>Personal</span>
                           )}
                         </div>
                         <div className="agent-desc">{agentMeta.desc}</div>
