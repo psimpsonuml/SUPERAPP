@@ -6,6 +6,7 @@ import {
   fetchAgents, fetchHealthReport, fetchContentPerformance,
   fetchProductIntelligence, fetchApprovalStats, fetchInfraStatus,
   fetchCommunityReport, fetchBuilderIntel, fetchSeoPostsToday,
+  fetchOutreachReport,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -36,6 +37,7 @@ export default function ReportsPage() {
   const [communityReport, setCommunityReport] = useState(null);
   const [builderIntel, setBuilderIntel] = useState(null);
   const [seoPosts, setSeoPosts] = useState(null);
+  const [outreachReport, setOutreachReport] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -54,6 +56,7 @@ export default function ReportsPage() {
         fetchCommunityReport(7),
         fetchBuilderIntel(1),
         fetchSeoPostsToday(),
+        fetchOutreachReport(),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -71,10 +74,11 @@ export default function ReportsPage() {
       setCommunityReport(val(10));
       setBuilderIntel(val(11));
       setSeoPosts(val(12));
+      setOutreachReport(val(13));
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[13 + i];
+        const r = results[14 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -271,6 +275,137 @@ export default function ReportsPage() {
           <StatBlock value={approvalStats?.rejected_today ?? 0} label="Rejected Today" color="var(--red)" />
           <StatBlock value={approvalStats?.auto_approved_today ?? 0} label="Auto-Approved" color="var(--cyan)" />
         </div>
+      </div>
+
+      {/* ── 5b. Outreach ─────────────────────────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Outreach</h2>
+          <span className="text-sm text-muted">
+            {outreachReport ? `${outreachReport.today?.total || 0} prospects today · ${outreachReport.totalProspects || 0} total` : 'Loading...'}
+          </span>
+        </div>
+        {(!outreachReport || outreachReport.today?.total === 0) ? (
+          <div className="card card-compact"><div className="text-sm text-muted">No outreach activity today. Agent runs at 8:30 AM ET.</div></div>
+        ) : (
+          <>
+            <div className="stats-row" style={{ marginBottom: 16 }}>
+              <StatBlock value={outreachReport.today?.total || 0} label="Prospects Found" color="var(--accent)" />
+              <StatBlock value={outreachReport.today?.emailsDrafted || 0} label="Emails Drafted" />
+              <StatBlock value={outreachReport.today?.userTrack || 0} label="End-User" />
+              <StatBlock value={outreachReport.today?.partnerTrack || 0} label="Partnership" />
+            </div>
+
+            {/* Per-product breakdown */}
+            <div className="grid-3" style={{ marginBottom: 16 }}>
+              {PRODUCTS.map(product => {
+                const stats = outreachReport.today?.byProduct?.[product.id];
+                return (
+                  <div key={product.id} className="card card-compact" style={{ margin: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>{product.name}</div>
+                    <div className="info-row">
+                      <span className="info-label">Found</span>
+                      <span className="info-value">{stats?.found || 0}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">Drafted</span>
+                      <span className="info-value">{stats?.drafted || 0}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Pipeline status breakdown */}
+            {outreachReport.pipeline && Object.keys(outreachReport.pipeline).length > 0 && (
+              <div className="card card-compact" style={{ marginBottom: 16 }}>
+                <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                  Pipeline Status
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {Object.entries(outreachReport.pipeline).map(([stage, count]) => {
+                    const badge = stage === 'replied' || stage === 'engaged' || stage === 'converted' || stage === 'partnership_active' ? 'badge-green'
+                      : stage === 'contacted' || stage === 'pitched' || stage === 'in_discussion' ? 'badge-yellow'
+                      : stage === 'closed_lost' || stage === 'declined' ? 'badge-red'
+                      : 'badge-muted';
+                    return (
+                      <div key={stage} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span className={`badge ${badge}`} style={{ fontSize: 10 }}>{stage.replace(/_/g, ' ')}</span>
+                        <span className="text-sm font-semibold">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Response rates */}
+            {(outreachReport.responseRate7d || outreachReport.responseRate30d) && (
+              <div className="stats-row" style={{ marginBottom: 16 }}>
+                {outreachReport.responseRate7d && (
+                  <StatBlock
+                    value={`${outreachReport.responseRate7d.rate}%`}
+                    label="7-Day Response Rate"
+                    sub={`${outreachReport.responseRate7d.replied}/${outreachReport.responseRate7d.sent} replied`}
+                    color="var(--green)"
+                  />
+                )}
+                {outreachReport.responseRate30d && (
+                  <StatBlock
+                    value={`${outreachReport.responseRate30d.rate}%`}
+                    label="30-Day Response Rate"
+                    sub={`${outreachReport.responseRate30d.replied}/${outreachReport.responseRate30d.sent} replied`}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Top prospects */}
+            {outreachReport.topProspects?.length > 0 && (
+              <div className="card card-compact">
+                <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                  Top Prospects Today (ICP 7+)
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Product</th>
+                        <th>Track</th>
+                        <th>ICP</th>
+                        <th>Platform</th>
+                        <th>Stage</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {outreachReport.topProspects.map((p, i) => {
+                        const scoreBadge = p.icp_score >= 8 ? 'badge-green' : 'badge-yellow';
+                        const stageBadge = p.stage === 'email_drafted' || p.stage === 'pitch_drafted' ? 'badge-yellow'
+                          : p.stage === 'contacted' || p.stage === 'pitched' ? 'badge-blue'
+                          : p.stage === 'replied' ? 'badge-green'
+                          : 'badge-muted';
+                        return (
+                          <tr key={p.id || i}>
+                            <td className="text-sm">
+                              <div className="font-semibold">{p.name}</div>
+                              {p.company && <div className="text-xs text-muted">{p.title ? `${p.title} @ ` : ''}{p.company}</div>}
+                            </td>
+                            <td className="text-sm">{PRODUCTS.find(pr => pr.id === p.product)?.name || p.product}</td>
+                            <td><span className="badge badge-muted" style={{ fontSize: 10 }}>{p.track}</span></td>
+                            <td><span className={`badge ${scoreBadge}`}>{p.icp_score}/10</span></td>
+                            <td className="text-sm text-muted">{p.platform}</td>
+                            <td><span className={`badge ${stageBadge}`} style={{ fontSize: 10 }}>{(p.stage || '').replace(/_/g, ' ')}</span></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* ── 6 & 7. Pipeline (User + Partner) ──────────── */}

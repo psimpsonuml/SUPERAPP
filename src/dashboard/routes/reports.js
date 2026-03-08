@@ -271,4 +271,97 @@ router.get('/builder-intel', async (req, res) => {
   }
 });
 
+// GET /api/reports/outreach — outreach prospector summary
+router.get('/outreach', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    // Today's prospects
+    const { data: todayProspects } = await supabase
+      .from('prospect_pipeline')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .gte('created_at', todayStart.toISOString())
+      .order('icp_score', { ascending: false });
+
+    const prospects = todayProspects || [];
+
+    // Group by product
+    const byProduct = {};
+    for (const p of prospects) {
+      if (!byProduct[p.product]) byProduct[p.product] = { found: 0, drafted: 0 };
+      byProduct[p.product].found++;
+      if (['email_drafted', 'pitch_drafted', 'contacted', 'pitched'].includes(p.stage)) {
+        byProduct[p.product].drafted++;
+      }
+    }
+
+    // Pipeline breakdown (all time)
+    const { data: allProspects } = await supabase
+      .from('prospect_pipeline')
+      .select('stage, track, product')
+      .eq('account_id', req.accountId);
+
+    const pipelineBreakdown = {};
+    for (const p of (allProspects || [])) {
+      pipelineBreakdown[p.stage] = (pipelineBreakdown[p.stage] || 0) + 1;
+    }
+
+    // Response rates (7-day and 30-day)
+    const days7 = new Date();
+    days7.setDate(days7.getDate() - 7);
+    const days30 = new Date();
+    days30.setDate(days30.getDate() - 30);
+
+    const { data: sends7 } = await supabase
+      .from('outreach_sends')
+      .select('id, replied_at')
+      .eq('account_id', req.accountId)
+      .gte('sent_at', days7.toISOString());
+
+    const { data: sends30 } = await supabase
+      .from('outreach_sends')
+      .select('id, replied_at')
+      .eq('account_id', req.accountId)
+      .gte('sent_at', days30.toISOString());
+
+    const calcRate = (sends) => {
+      if (!sends || sends.length === 0) return null;
+      const replied = sends.filter(s => s.replied_at).length;
+      return { sent: sends.length, replied, rate: (replied / sends.length * 100).toFixed(1) };
+    };
+
+    res.json({
+      today: {
+        total: prospects.length,
+        userTrack: prospects.filter(p => p.track === 'user').length,
+        partnerTrack: prospects.filter(p => p.track === 'partner').length,
+        emailsDrafted: prospects.filter(p => ['email_drafted', 'pitch_drafted'].includes(p.stage)).length,
+        byProduct,
+      },
+      pipeline: pipelineBreakdown,
+      totalProspects: (allProspects || []).length,
+      responseRate7d: calcRate(sends7),
+      responseRate30d: calcRate(sends30),
+      topProspects: prospects.filter(p => p.icp_score >= 7).slice(0, 10).map(p => ({
+        id: p.id,
+        name: p.name,
+        product: p.product,
+        track: p.track,
+        stage: p.stage,
+        icp_score: p.icp_score,
+        platform: p.platform,
+        source: p.source,
+        source_url: p.source_url,
+        company: p.company,
+        title: p.title,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
