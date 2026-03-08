@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import {
-  fetchDailyReport, fetchPainPoints, fetchPipeline,
+  fetchDailyReport, fetchPainPoints, fetchPainPointsToday, fetchPipeline,
   fetchAgents, fetchHealthReport, fetchContentPerformance,
   fetchProductIntelligence, fetchApprovalStats,
 } from '../../lib/api';
@@ -30,6 +30,7 @@ export default function ReportsPage() {
   const [approvalStats, setApprovalStats] = useState(null);
   const [contentPerf, setContentPerf] = useState({});
   const [intel, setIntel] = useState([]);
+  const [todayPainPoints, setTodayPainPoints] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function ReportsPage() {
         fetchHealthReport(),
         fetchApprovalStats(),
         fetchProductIntelligence(),
+        fetchPainPointsToday(),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -55,10 +57,11 @@ export default function ReportsPage() {
       setHealth(val(5));
       setApprovalStats(val(6)?.stats || val(6));
       setIntel(val(7)?.recommendations || []);
+      setTodayPainPoints(val(8));
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[8 + i];
+        const r = results[9 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -231,10 +234,107 @@ export default function ReportsPage() {
         );
       })}
 
-      {/* ── 8. Pain Points ────────────────────────────── */}
+      {/* ── 8. Today's Pain Points ──────────────────── */}
       <div className="section">
         <div className="section-header">
-          <h2>Pain Points Detected</h2>
+          <h2>Today&apos;s Pain Points</h2>
+          <span className="text-sm text-muted">
+            {todayPainPoints ? `${todayPainPoints.total || 0} found · ${todayPainPoints.highScore || 0} high-score` : 'Loading...'}
+          </span>
+        </div>
+        {(!todayPainPoints || todayPainPoints.total === 0) ? (
+          <div className="card card-compact"><div className="text-sm text-muted">No pain points detected today. Agent runs at 5:30 AM ET.</div></div>
+        ) : (
+          <>
+            <div className="stats-row" style={{ marginBottom: 16 }}>
+              <StatBlock value={todayPainPoints.total} label="Total Found" />
+              <StatBlock value={todayPainPoints.highScore} label="Score 7+" color="var(--accent)" />
+              <StatBlock value={Object.keys(todayPainPoints.byProduct || {}).length} label="Products" />
+            </div>
+
+            {Object.entries(todayPainPoints.byProduct || {}).map(([productId, items]) => (
+              <div key={productId} style={{ marginBottom: 20 }}>
+                <h3 style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 8 }}>
+                  {PRODUCTS.find(p => p.id === productId)?.name || productId} ({items.length})
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {items.map((pp, i) => {
+                    const scoreBadge = pp.score >= 8 ? 'badge-green' : pp.score >= 6 ? 'badge-yellow' : 'badge-muted';
+                    const urgencyBadge = pp.urgency === 'critical' ? 'badge-red'
+                      : pp.urgency === 'high' ? 'badge-orange'
+                      : pp.urgency === 'medium' ? 'badge-yellow'
+                      : 'badge-muted';
+                    return (
+                      <div key={pp.id || i} className="card card-compact" style={{ margin: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div className="font-semibold text-sm" style={{ marginBottom: 2 }}>
+                              {pp.title || (pp.text || '').slice(0, 100)}
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                              <span className={`badge ${scoreBadge}`} style={{ fontSize: 10 }}>
+                                Score: {pp.score}/10
+                              </span>
+                              <span className={`badge ${urgencyBadge}`} style={{ fontSize: 10 }}>
+                                {pp.urgency || 'low'}
+                              </span>
+                              {pp.classification && (
+                                <span className="badge badge-purple" style={{ fontSize: 10 }}>
+                                  {(pp.classification || '').replace(/_/g, ' ')}
+                                </span>
+                              )}
+                              {pp.subreddit && (
+                                <span className="text-xs text-muted">{pp.subreddit}</span>
+                              )}
+                            </div>
+                          </div>
+                          {pp.source_url && (
+                            <a
+                              href={pp.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-sm"
+                              style={{ fontSize: 10, padding: '3px 8px', flexShrink: 0, marginLeft: 8, textDecoration: 'none' }}
+                            >
+                              View Post
+                            </a>
+                          )}
+                        </div>
+
+                        {pp.text && pp.text !== pp.title && (
+                          <p className="text-xs text-secondary" style={{ lineHeight: 1.5, maxHeight: 48, overflow: 'hidden', marginBottom: 6 }}>
+                            {pp.text.slice(0, 250)}{pp.text.length > 250 ? '...' : ''}
+                          </p>
+                        )}
+
+                        {pp.drafted_response && (
+                          <div style={{
+                            marginTop: 4, padding: '8px 12px',
+                            background: 'var(--bg)', borderRadius: 6,
+                            borderLeft: '3px solid var(--accent)',
+                          }}>
+                            <div className="text-xs text-muted font-semibold" style={{ marginBottom: 4 }}>
+                              Drafted Response {pp.response_mentions_product ? '(mentions product)' : ''}
+                            </div>
+                            <p className="text-xs text-secondary" style={{ lineHeight: 1.5, maxHeight: 60, overflow: 'hidden' }}>
+                              {pp.drafted_response.slice(0, 300)}{pp.drafted_response.length > 300 ? '...' : ''}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* ── 8b. Pain Points (30-day history) ───────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Pain Point History</h2>
           <span className="text-sm text-muted">Last 30 days</span>
         </div>
         {painPoints.length === 0 ? (
@@ -247,23 +347,32 @@ export default function ReportsPage() {
                   <tr>
                     <th>Signal</th>
                     <th>Product</th>
+                    <th>Score</th>
                     <th>Urgency</th>
                     <th>Source</th>
                     <th>Date</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {painPoints.slice(0, 15).map((pp, i) => {
+                  {painPoints.slice(0, 20).map((pp, i) => {
                     const urgencyBadge = pp.urgency === 'critical' ? 'badge-red'
                       : pp.urgency === 'high' ? 'badge-orange'
                       : pp.urgency === 'medium' ? 'badge-yellow'
                       : 'badge-muted';
+                    const scoreBadge = pp.score >= 8 ? 'badge-green' : pp.score >= 6 ? 'badge-yellow' : 'badge-muted';
                     return (
                       <tr key={pp.id || i}>
-                        <td className="text-sm">{pp.text || pp.description || pp.issue || '—'}</td>
-                        <td className="text-sm">{pp.product_relevance || pp.product || '—'}</td>
+                        <td className="text-sm">{pp.title || (pp.text || '').slice(0, 80) || '—'}</td>
+                        <td className="text-sm">{pp.product || pp.product_relevance || '—'}</td>
+                        <td><span className={`badge ${scoreBadge}`}>{pp.score || '—'}/10</span></td>
                         <td><span className={`badge ${urgencyBadge}`}>{pp.urgency || 'low'}</span></td>
-                        <td className="text-sm text-muted">{pp.source || '—'}</td>
+                        <td className="text-sm text-muted">
+                          {pp.source_url ? (
+                            <a href={pp.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                              {pp.subreddit || pp.source || 'link'}
+                            </a>
+                          ) : (pp.source || '—')}
+                        </td>
                         <td className="text-sm text-muted">
                           {pp.date_found ? new Date(pp.date_found).toLocaleDateString() : '—'}
                         </td>

@@ -65,6 +65,39 @@ router.get('/pain-points', async (req, res) => {
   }
 });
 
+// GET /api/reports/pain-points-today — today's pain points grouped by product, sorted by score
+router.get('/pain-points-today', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data } = await supabase
+      .from('pain_points')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .gte('date_found', todayStart.toISOString())
+      .order('score', { ascending: false });
+
+    // Group by product
+    const byProduct = {};
+    for (const pp of (data || [])) {
+      const prod = pp.product || pp.product_relevance || 'unknown';
+      if (!byProduct[prod]) byProduct[prod] = [];
+      byProduct[prod].push(pp);
+    }
+
+    res.json({
+      total: (data || []).length,
+      highScore: (data || []).filter(p => p.score >= 7).length,
+      byProduct,
+      painPoints: data || [],
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/reports/pipeline — CRM pipeline overview
 router.get('/pipeline', async (req, res) => {
   try {
