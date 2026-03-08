@@ -1622,3 +1622,275 @@ input[type="checkbox"] {
 .quiz-profile-card:hover {
   border-color: var(--border-hover);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Life Manager — Routines, Family Log, Streaks
+   ═══════════════════════════════════════════════════════════ */
+
+/* Shared form inputs */
+.life-input {
+  padding: 8px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.life-input:focus {
+  border-color: var(--accent);
+}
+
+.life-select {
+  padding: 8px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.life-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.life-textarea:focus {
+  border-color: var(--accent);
+}
+
+/* Day of week picker */
+.life-day-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-spring);
+}
+
+.life-day-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.life-day-active {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #000 !important;
+}
+
+/* Routine checklist items */
+.life-routine-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: all 0.3s var(--ease-out);
+}
+
+.life-routine-item:hover {
+  background: var(--surface-hover);
+}
+
+.life-routine-done {
+  opacity: 0.6;
+}
+
+.life-routine-completing {
+  animation: routineComplete 0.6s var(--ease-spring) forwards;
+}
+
+@keyframes routineComplete {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.02); background: var(--green-muted); border-color: var(--green); }
+  100% { transform: scale(1); opacity: 0.6; }
+}
+
+.life-routine-missed {
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.life-text-done {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Checkbox */
+.life-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border-hover);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: all 0.2s var(--ease-spring);
+  flex-shrink: 0;
+}
+
+.life-check:hover:not(:disabled) {
+  border-color: var(--green);
+  background: var(--green-muted);
+}
+
+.life-check-done {
+  background: var(--green) !important;
+  border-color: var(--green) !important;
+  color: #000 !important;
+}
+
+/* Routine management row */
+.life-routine-manage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: background 0.2s;
+}
+
+.life-routine-manage:hover {
+  background: var(--surface-hover);
+}
+
+/* Mini calendar days */
+.life-calendar-day {
+  min-width: 100px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+  flex-shrink: 0;
+  transition: border-color 0.2s;
+}
+
+/* Family log timeline */
+.life-timeline {
+  position: relative;
+  padding-left: 20px;
+}
+
+.life-timeline::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.life-timeline-date {
+  position: relative;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 12px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.life-timeline-entry {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.life-timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Contribution grid */
+.life-grid-container {
+  display: grid;
+  grid-template-rows: repeat(7, 1fr);
+  grid-auto-flow: column;
+  gap: 3px;
+}
+
+.life-grid-cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+}
+
+.life-grid-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px;
+  margin-bottom: 4px;
+}
+
+.life-grid-labels span {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Milestone celebration overlay */
+.life-milestone-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  animation: fadeIn 0.2s;
+}
+
+.life-milestone-card {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xl);
+  padding: 40px 60px;
+  text-align: center;
+  box-shadow: 0 0 60px rgba(245, 158, 11, 0.2);
+  animation: milestoneIn 0.4s var(--ease-spring);
+}
+
+@keyframes milestoneIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
