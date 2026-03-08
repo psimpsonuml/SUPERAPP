@@ -11,6 +11,10 @@ const agentRoutes = require('./dashboard/routes/agents');
 const settingsRoutes = require('./dashboard/routes/settings');
 const reportRoutes = require('./dashboard/routes/reports');
 const personalRoutes = require('./dashboard/routes/personal');
+const tmdbRoutes = require('./dashboard/routes/tmdb');
+const quizRoutes = require('./dashboard/routes/quiz');
+const lifeManagerRoutes = require('./dashboard/routes/life-manager');
+const booksRoutes = require('./dashboard/routes/books');
 
 const app = express();
 
@@ -93,6 +97,10 @@ app.use('/api/agents', agentRoutes); // agents has its own graceful fallback
 app.use('/api/settings', requireSupabase, settingsRoutes);
 app.use('/api/reports', requireSupabase, reportRoutes);
 app.use('/api/personal', personalRoutes); // personal module has its own graceful fallback
+app.use('/api/tmdb', tmdbRoutes); // TMDB browse/rate with cascade scoring
+app.use('/api/quiz', quizRoutes); // Profile quiz with 200+ questions
+app.use('/api/life', lifeManagerRoutes); // Life Manager: routines, family log, streaks
+app.use('/api/books', booksRoutes); // Books: discover, rate, author cascade
 
 // API info
 app.get('/api', (_req, res) => {
