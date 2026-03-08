@@ -43,10 +43,10 @@ router.get('/', async (req, res) => {
 // GET /api/agents/:id/runs — get run history for an agent
 router.get('/:id/runs', async (req, res) => {
   try {
-    const supabase = getSupabase();
+    if (!isSupabaseConfigured()) return res.json({ runs: [] });
     const limit = parseInt(req.query.limit, 10) || 20;
 
-    const { data } = await supabase
+    const { data } = await getSupabase()
       .from('agent_runs')
       .select('*')
       .eq('account_id', req.accountId)

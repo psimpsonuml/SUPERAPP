@@ -77,19 +77,16 @@ router.get('/uptime', async (req, res) => {
 
     const since = new Date(Date.now() - (periodMs[period] || periodMs['24h'])).toISOString();
 
-    let query = getSupabase()
-      .from('infra_check_results')
-      .select('service, status, response_time_ms, message, created_at')
-      .eq('account_id', req.accountId)
-      .gte('created_at', since)
-      .order('created_at', { ascending: true });
-
-    if (service) {
-      query = query.eq('service', service);
-    }
-
-    const { data, error } = await query.limit(2000);
-    if (error) throw error;
+    const { data } = await safeQuery(sb => {
+      let query = sb
+        .from('infra_check_results')
+        .select('service, status, response_time_ms, message, created_at')
+        .eq('account_id', req.accountId)
+        .gte('created_at', since)
+        .order('created_at', { ascending: true });
+      if (service) query = query.eq('service', service);
+      return query.limit(2000);
+    });
 
     const checks = data || [];
 
@@ -147,20 +144,20 @@ router.get('/alerts', async (req, res) => {
   try {
     const { resolved, severity, limit: lim = 50 } = req.query;
 
-    let query = getSupabase()
-      .from('infra_alerts')
-      .select('*')
-      .eq('account_id', req.accountId)
-      .order('created_at', { ascending: false })
-      .limit(parseInt(lim));
+    const { data } = await safeQuery(sb => {
+      let query = sb
+        .from('infra_alerts')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .order('created_at', { ascending: false })
+        .limit(parseInt(lim));
 
-    if (resolved === 'true') query = query.eq('resolved', true);
-    else if (resolved === 'false') query = query.eq('resolved', false);
+      if (resolved === 'true') query = query.eq('resolved', true);
+      else if (resolved === 'false') query = query.eq('resolved', false);
+      if (severity) query = query.eq('severity', severity);
 
-    if (severity) query = query.eq('severity', severity);
-
-    const { data, error } = await query;
-    if (error) throw error;
+      return query;
+    });
 
     res.json({ alerts: data || [] });
   } catch (error) {
@@ -171,6 +168,8 @@ router.get('/alerts', async (req, res) => {
 // ── POST /api/infrastructure/alerts/:id/resolve ─────────────
 router.post('/alerts/:id/resolve', async (req, res) => {
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
+
     const { data, error } = await getSupabase()
       .from('infra_alerts')
       .update({ resolved: true, resolved_at: new Date().toISOString() })
@@ -179,7 +178,7 @@ router.post('/alerts/:id/resolve', async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error || !data) return res.status(404).json({ error: 'Alert not found' });
     res.json({ alert: data });
   } catch (error) {
     res.status(500).json({ error: error.message });

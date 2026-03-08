@@ -1,8 +1,14 @@
 const express = require('express');
 const AnalyticsPipeline = require('../../shared/analytics');
-const { getSupabase } = require('../../db/supabase');
+const { getSupabase, isSupabaseConfigured } = require('../../db/supabase');
 
 const router = express.Router();
+
+async function safeQuery(queryFn) {
+  if (!isSupabaseConfigured()) return { data: [], error: null };
+  try { return await queryFn(getSupabase()); }
+  catch (err) { return { data: [], error: err }; }
+}
 
 // GET /api/reports/daily — get today's or a specific day's report data
 router.get('/daily', async (req, res) => {
@@ -52,12 +58,13 @@ router.get('/pain-points', async (req, res) => {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const { data } = await supabase
-      .from('pain_points')
-      .select('*')
-      .eq('account_id', req.accountId)
-      .gte('date_found', since.toISOString())
-      .order('date_found', { ascending: false });
+    const { data } = await safeQuery(sb =>
+      sb.from('pain_points')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .gte('date_found', since.toISOString())
+        .order('date_found', { ascending: false })
+    );
 
     res.json({ days, painPoints: data || [] });
   } catch (error) {
@@ -68,16 +75,16 @@ router.get('/pain-points', async (req, res) => {
 // GET /api/reports/pain-points-today — today's pain points grouped by product, sorted by score
 router.get('/pain-points-today', async (req, res) => {
   try {
-    const supabase = getSupabase();
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const { data } = await supabase
-      .from('pain_points')
-      .select('*')
-      .eq('account_id', req.accountId)
-      .gte('date_found', todayStart.toISOString())
-      .order('score', { ascending: false });
+    const { data } = await safeQuery(sb =>
+      sb.from('pain_points')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .gte('date_found', todayStart.toISOString())
+        .order('score', { ascending: false })
+    );
 
     // Group by product
     const byProduct = {};
@@ -101,14 +108,14 @@ router.get('/pain-points-today', async (req, res) => {
 // GET /api/reports/pipeline — CRM pipeline overview
 router.get('/pipeline', async (req, res) => {
   try {
-    const supabase = getSupabase();
     const track = req.query.track || 'user';
 
-    const { data } = await supabase
-      .from('prospect_pipeline')
-      .select('stage, product, track')
-      .eq('account_id', req.accountId)
-      .eq('track', track);
+    const { data } = await safeQuery(sb =>
+      sb.from('prospect_pipeline')
+        .select('stage, product, track')
+        .eq('account_id', req.accountId)
+        .eq('track', track)
+    );
 
     // Aggregate by stage
     const stages = {};
@@ -126,20 +133,19 @@ router.get('/pipeline', async (req, res) => {
 // GET /api/reports/product-intelligence — product intelligence summary
 router.get('/product-intelligence', async (req, res) => {
   try {
-    const supabase = getSupabase();
     const product = req.query.product;
 
-    let query = supabase
-      .from('product_intelligence')
-      .select('*')
-      .eq('account_id', req.accountId)
-      .neq('status', 'stays')
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (product) query = query.eq('product', product);
-
-    const { data } = await query;
+    const { data } = await safeQuery(sb => {
+      let query = sb
+        .from('product_intelligence')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .neq('status', 'stays')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (product) query = query.eq('product', product);
+      return query;
+    });
     res.json({ recommendations: data || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -149,18 +155,18 @@ router.get('/product-intelligence', async (req, res) => {
 // GET /api/reports/communities — community discovery report (recent + all)
 router.get('/communities', async (req, res) => {
   try {
-    const supabase = getSupabase();
     const days = parseInt(req.query.days, 10) || 7;
     const since = new Date();
     since.setDate(since.getDate() - days);
 
     // Newly discovered communities
-    const { data: recent } = await supabase
-      .from('community_profiles')
-      .select('*')
-      .eq('account_id', req.accountId)
-      .gte('created_at', since.toISOString())
-      .order('overall_score', { ascending: false });
+    const { data: recent } = await safeQuery(sb =>
+      sb.from('community_profiles')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .gte('created_at', since.toISOString())
+        .order('overall_score', { ascending: false })
+    );
 
     // Group by product then platform
     const byProduct = {};
@@ -171,10 +177,11 @@ router.get('/communities', async (req, res) => {
     }
 
     // Summary stats
-    const { data: allCommunities } = await supabase
-      .from('community_profiles')
-      .select('id, platform, product, overall_score')
-      .eq('account_id', req.accountId);
+    const { data: allCommunities } = await safeQuery(sb =>
+      sb.from('community_profiles')
+        .select('id, platform, product, overall_score')
+        .eq('account_id', req.accountId)
+    );
 
     const total = (allCommunities || []).length;
     const byPlatformCount = {};
@@ -198,17 +205,17 @@ router.get('/communities', async (req, res) => {
 // GET /api/reports/seo-posts-today — today's SEO/AEO posts from content_memory
 router.get('/seo-posts-today', async (req, res) => {
   try {
-    const supabase = getSupabase();
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const { data } = await supabase
-      .from('content_memory')
-      .select('*')
-      .eq('account_id', req.accountId)
-      .eq('content_type', 'blog_post')
-      .gte('created_at', todayStart.toISOString())
-      .order('created_at', { ascending: true });
+    const { data } = await safeQuery(sb =>
+      sb.from('content_memory')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .eq('content_type', 'blog_post')
+        .gte('created_at', todayStart.toISOString())
+        .order('created_at', { ascending: true })
+    );
 
     const posts = (data || []).map(post => ({
       id: post.id,
@@ -239,18 +246,18 @@ router.get('/seo-posts-today', async (req, res) => {
 // GET /api/reports/builder-intel — today's builder community intel
 router.get('/builder-intel', async (req, res) => {
   try {
-    const supabase = getSupabase();
     const days = parseInt(req.query.days, 10) || 1;
     const since = new Date();
     since.setDate(since.getDate() - days);
     since.setHours(0, 0, 0, 0);
 
-    const { data } = await supabase
-      .from('builder_intel')
-      .select('*')
-      .eq('account_id', req.accountId)
-      .gte('date_found', since.toISOString())
-      .order('relevance_score', { ascending: false });
+    const { data } = await safeQuery(sb =>
+      sb.from('builder_intel')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .gte('date_found', since.toISOString())
+        .order('relevance_score', { ascending: false })
+    );
 
     // Group by intel type
     const byType = {};
@@ -274,17 +281,17 @@ router.get('/builder-intel', async (req, res) => {
 // GET /api/reports/outreach — outreach prospector summary
 router.get('/outreach', async (req, res) => {
   try {
-    const supabase = getSupabase();
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
     // Today's prospects
-    const { data: todayProspects } = await supabase
-      .from('prospect_pipeline')
-      .select('*')
-      .eq('account_id', req.accountId)
-      .gte('created_at', todayStart.toISOString())
-      .order('icp_score', { ascending: false });
+    const { data: todayProspects } = await safeQuery(sb =>
+      sb.from('prospect_pipeline')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .gte('created_at', todayStart.toISOString())
+        .order('icp_score', { ascending: false })
+    );
 
     const prospects = todayProspects || [];
 
@@ -299,10 +306,11 @@ router.get('/outreach', async (req, res) => {
     }
 
     // Pipeline breakdown (all time)
-    const { data: allProspects } = await supabase
-      .from('prospect_pipeline')
-      .select('stage, track, product')
-      .eq('account_id', req.accountId);
+    const { data: allProspects } = await safeQuery(sb =>
+      sb.from('prospect_pipeline')
+        .select('stage, track, product')
+        .eq('account_id', req.accountId)
+    );
 
     const pipelineBreakdown = {};
     for (const p of (allProspects || [])) {
@@ -315,17 +323,19 @@ router.get('/outreach', async (req, res) => {
     const days30 = new Date();
     days30.setDate(days30.getDate() - 30);
 
-    const { data: sends7 } = await supabase
-      .from('outreach_sends')
-      .select('id, replied_at')
-      .eq('account_id', req.accountId)
-      .gte('sent_at', days7.toISOString());
+    const { data: sends7 } = await safeQuery(sb =>
+      sb.from('outreach_sends')
+        .select('id, replied_at')
+        .eq('account_id', req.accountId)
+        .gte('sent_at', days7.toISOString())
+    );
 
-    const { data: sends30 } = await supabase
-      .from('outreach_sends')
-      .select('id, replied_at')
-      .eq('account_id', req.accountId)
-      .gte('sent_at', days30.toISOString());
+    const { data: sends30 } = await safeQuery(sb =>
+      sb.from('outreach_sends')
+        .select('id, replied_at')
+        .eq('account_id', req.accountId)
+        .gte('sent_at', days30.toISOString())
+    );
 
     const calcRate = (sends) => {
       if (!sends || sends.length === 0) return null;

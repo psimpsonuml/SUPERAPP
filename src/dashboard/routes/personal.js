@@ -29,6 +29,7 @@ router.post('/entertainment/rate', async (req, res) => {
   if (!score || score < 1 || score > 10) return res.status(400).json({ error: 'Score must be 1-10' });
 
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     // Upsert item if needed
     let itemId = item_id;
@@ -72,6 +73,7 @@ router.post('/books/rate', async (req, res) => {
   const { title, author, score, status } = req.body;
   if (!title) return res.status(400).json({ error: 'title required' });
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const { data } = await supabase.from('book_items').upsert({
       account_id: req.accountId, title, author, status: status || 'finished',
@@ -96,6 +98,7 @@ router.post('/reminders', async (req, res) => {
   const { title, frequency, time, notes } = req.body;
   if (!title) return res.status(400).json({ error: 'title required' });
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const { data } = await supabase.from('reminders').insert({
       account_id: req.accountId, title, frequency: frequency || 'daily',
@@ -110,6 +113,7 @@ router.post('/reminders', async (req, res) => {
 
 router.patch('/reminders/:id/complete', async (req, res) => {
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const { data: current } = await supabase.from('reminders')
       .select('*').eq('id', req.params.id).eq('account_id', req.accountId).single();
@@ -137,6 +141,7 @@ router.post('/family-log', async (req, res) => {
   const { text, child, category, photo_url } = req.body;
   if (!text) return res.status(400).json({ error: 'text required' });
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const { data } = await supabase.from('family_log').insert({
       account_id: req.accountId, text, child: child || null,
@@ -172,6 +177,7 @@ router.post('/quiz/answer', async (req, res) => {
   const { question_id, answer } = req.body;
   if (!question_id || answer == null) return res.status(400).json({ error: 'question_id and answer required' });
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const { data } = await supabase.from('quiz_answers').upsert({
       account_id: req.accountId, question_id, answer, answered_at: new Date().toISOString(),
@@ -202,6 +208,7 @@ router.post('/learning', async (req, res) => {
   const { title, topic, url, estimated_time, priority } = req.body;
   if (!title) return res.status(400).json({ error: 'title required' });
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const { data } = await supabase.from('learning_queue').insert({
       account_id: req.accountId, title, topic, url,

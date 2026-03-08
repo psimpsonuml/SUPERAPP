@@ -81,6 +81,7 @@ router.post('/reminders', async (req, res) => {
   if (!name) return res.status(400).json({ error: 'name required' });
 
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const { data, error } = await supabase.from('reminders').insert({
       account_id: req.accountId,
@@ -105,6 +106,7 @@ router.post('/reminders', async (req, res) => {
 router.patch('/reminders/:id', async (req, res) => {
   const { name, frequency, days_of_week, custom_interval_days, time_of_day, category, active } = req.body;
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const updates = { updated_at: new Date().toISOString() };
     if (name !== undefined) updates.name = name;
@@ -130,6 +132,7 @@ router.patch('/reminders/:id', async (req, res) => {
 // DELETE /api/life/reminders/:id
 router.delete('/reminders/:id', async (req, res) => {
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     await supabase.from('reminders')
       .delete()
@@ -144,6 +147,7 @@ router.delete('/reminders/:id', async (req, res) => {
 // POST /api/life/reminders/:id/complete — mark a reminder complete for today
 router.post('/reminders/:id/complete', async (req, res) => {
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const accountId = req.accountId;
     const reminderId = req.params.id;
@@ -338,26 +342,26 @@ router.get('/family', async (req, res) => {
     const { child, category, month, search, limit = 50 } = req.query;
     const accountId = req.accountId;
 
-    let query = getSupabase().from('family_log')
-      .select('*')
-      .eq('account_id', accountId)
-      .order('created_at', { ascending: false })
-      .limit(parseInt(limit));
+    const { data } = await safeQuery(sb => {
+      let query = sb.from('family_log')
+        .select('*')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: false })
+        .limit(parseInt(limit));
 
-    if (child) query = query.eq('child_tag', child);
-    if (category) query = query.eq('category', category);
-    if (search) query = query.ilike('entry_text', `%${search}%`);
-    if (month) {
-      // month format: "2026-03"
-      const start = `${month}-01`;
-      const [y, m] = month.split('-').map(Number);
-      const endDate = new Date(y, m, 0);
-      const end = endDate.toISOString().split('T')[0];
-      query = query.gte('entry_date', start).lte('entry_date', end);
-    }
+      if (child) query = query.eq('child_tag', child);
+      if (category) query = query.eq('category', category);
+      if (search) query = query.ilike('entry_text', `%${search}%`);
+      if (month) {
+        const start = `${month}-01`;
+        const [y, m] = month.split('-').map(Number);
+        const endDate = new Date(y, m, 0);
+        const end = endDate.toISOString().split('T')[0];
+        query = query.gte('entry_date', start).lte('entry_date', end);
+      }
 
-    const { data, error } = await query;
-    if (error) throw error;
+      return query;
+    });
 
     // Get unique child names for filter options
     const { data: children } = await safeQuery((sb) =>
@@ -380,8 +384,8 @@ router.post('/family', async (req, res) => {
   if (!entry_text) return res.status(400).json({ error: 'entry_text required' });
 
   try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase.from('family_log').insert({
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
+    const { data, error } = await getSupabase().from('family_log').insert({
       account_id: req.accountId,
       entry_text,
       photo_url: photo_url || null,
@@ -408,13 +412,14 @@ router.get('/family/summary', async (req, res) => {
     const end = endDate.toISOString().split('T')[0];
     const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-    const { data, error } = await getSupabase().from('family_log')
-      .select('*')
-      .eq('account_id', req.accountId)
-      .gte('entry_date', start)
-      .lte('entry_date', end)
-      .order('entry_date', { ascending: true });
-    if (error) throw error;
+    const { data } = await safeQuery(sb =>
+      sb.from('family_log')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .gte('entry_date', start)
+        .lte('entry_date', end)
+        .order('entry_date', { ascending: true })
+    );
 
     const entries = data || [];
 

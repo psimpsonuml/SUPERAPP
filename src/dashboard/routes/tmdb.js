@@ -255,6 +255,7 @@ router.post('/rate', async (req, res) => {
   if (!tmdb_id && !title) return res.status(400).json({ error: 'tmdb_id or title required' });
 
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const accountId = req.accountId;
 
