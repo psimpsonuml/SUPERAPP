@@ -1,6 +1,6 @@
 const express = require('express');
 const { listAgents, createAgent } = require('../../agents/registry');
-const { getSupabase } = require('../../db/supabase');
+const { getSupabase, isSupabaseConfigured } = require('../../db/supabase');
 
 const router = express.Router();
 
@@ -8,6 +8,11 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const agents = listAgents();
+
+    if (!isSupabaseConfigured()) {
+      return res.json({ agents, note: 'Supabase not configured — run history unavailable' });
+    }
+
     const supabase = getSupabase();
 
     // Get latest run for each agent
