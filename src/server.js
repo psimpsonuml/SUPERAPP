@@ -85,6 +85,15 @@ try {
   logger.info('Legacy QuickAPI Hub routes loaded');
 } catch (err) {
   logger.warn(`Legacy routes not loaded (${err.message}). This is expected if better-sqlite3 is not installed.`);
+  // Serve stubs so callers get a clear error instead of 404
+  const unavailable = (_req, res) => {
+    res.status(503).json({
+      error: 'Service unavailable',
+      message: 'Legacy QuickAPI Hub routes require better-sqlite3. Install it or use the BeaconOps API at /api.',
+    });
+  };
+  app.use('/auth', unavailable);
+  app.use('/billing', unavailable);
 }
 
 // 404 handler

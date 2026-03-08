@@ -3,6 +3,21 @@ const ApprovalQueueService = require('../../shared/approval-queue');
 
 const router = express.Router();
 
+// GET /api/approval — alias for /pending (most common dashboard request)
+router.get('/', async (req, res) => {
+  try {
+    const queue = new ApprovalQueueService(req.accountId);
+    const items = await queue.getPending({
+      agentId: req.query.agent,
+      tier: req.query.tier ? parseInt(req.query.tier, 10) : undefined,
+      limit: req.query.limit ? parseInt(req.query.limit, 10) : 50,
+    });
+    res.json({ items, count: items.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/approval/pending
 router.get('/pending', async (req, res) => {
   try {
