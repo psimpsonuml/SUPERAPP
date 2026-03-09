@@ -27,9 +27,9 @@ CREATE TABLE IF NOT EXISTS community_profiles (
 
 ALTER TABLE community_profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "community_profiles_account_isolation" ON community_profiles
-  USING (account_id = current_setting('app.account_id', true)::uuid);
+DO $$ BEGIN CREATE POLICY "community_profiles_account_isolation" ON community_profiles
+  USING (account_id = current_setting('app.account_id', true)::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE INDEX idx_community_profiles_product ON community_profiles(account_id, product);
-CREATE INDEX idx_community_profiles_platform ON community_profiles(account_id, platform);
-CREATE INDEX idx_community_profiles_score ON community_profiles(account_id, overall_score DESC);
+CREATE INDEX IF NOT EXISTS idx_community_profiles_product ON community_profiles(account_id, product);
+CREATE INDEX IF NOT EXISTS idx_community_profiles_platform ON community_profiles(account_id, platform);
+CREATE INDEX IF NOT EXISTS idx_community_profiles_score ON community_profiles(account_id, overall_score DESC);

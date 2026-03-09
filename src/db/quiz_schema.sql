@@ -53,5 +53,5 @@ CREATE INDEX IF NOT EXISTS idx_quiz_profile_account ON quiz_profile(account_id);
 ALTER TABLE quiz_answers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quiz_profile ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "quiz_answers_account" ON quiz_answers FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
-CREATE POLICY "quiz_profile_account" ON quiz_profile FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
+DO $$ BEGIN CREATE POLICY "quiz_answers_account" ON quiz_answers FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "quiz_profile_account" ON quiz_profile FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

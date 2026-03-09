@@ -60,5 +60,5 @@ END $$;
 ALTER TABLE book_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE book_ratings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "book_items_account" ON book_items FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
-CREATE POLICY "book_ratings_account" ON book_ratings FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
+DO $$ BEGIN CREATE POLICY "book_items_account" ON book_items FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "book_ratings_account" ON book_ratings FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

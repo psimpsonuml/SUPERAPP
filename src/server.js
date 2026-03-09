@@ -155,6 +155,9 @@ if (!process.env.VERCEL) {
   const port = config.port;
   app.listen(port, () => {
     logger.info(`BeaconOps dashboard server running on port ${port}`);
+    // Run database health check after server is listening (non-blocking)
+    const { autoMigrate } = require('./db/auto-migrate');
+    autoMigrate().catch(err => logger.warn(`Auto-migrate check failed: ${err.message}`));
   });
 }
 

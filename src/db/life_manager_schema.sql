@@ -64,6 +64,6 @@ ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reminder_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE family_log ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "reminders_account" ON reminders FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
-CREATE POLICY "reminder_completions_account" ON reminder_completions FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
-CREATE POLICY "family_log_account" ON family_log FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
+DO $$ BEGIN CREATE POLICY "reminders_account" ON reminders FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "reminder_completions_account" ON reminder_completions FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "family_log_account" ON family_log FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

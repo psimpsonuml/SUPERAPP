@@ -31,5 +31,5 @@ CREATE INDEX IF NOT EXISTS idx_infra_check_results_service ON infra_check_result
 CREATE INDEX IF NOT EXISTS idx_infra_check_results_created ON infra_check_results(account_id, created_at DESC);
 
 ALTER TABLE infra_check_results ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "infra_check_results_account" ON infra_check_results FOR ALL
-  USING (account_id = current_setting('app.account_id')::uuid);
+DO $$ BEGIN CREATE POLICY "infra_check_results_account" ON infra_check_results FOR ALL
+  USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

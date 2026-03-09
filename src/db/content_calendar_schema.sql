@@ -26,12 +26,12 @@ CREATE TABLE IF NOT EXISTS content_calendar (
 
 ALTER TABLE content_calendar ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "content_calendar_account_isolation" ON content_calendar
-  USING (account_id = current_setting('app.account_id', true)::uuid);
+DO $$ BEGIN CREATE POLICY "content_calendar_account_isolation" ON content_calendar
+  USING (account_id = current_setting('app.account_id', true)::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE INDEX idx_content_calendar_date ON content_calendar(account_id, date);
-CREATE INDEX idx_content_calendar_community ON content_calendar(community_id);
-CREATE INDEX idx_content_calendar_status ON content_calendar(account_id, status);
+CREATE INDEX IF NOT EXISTS idx_content_calendar_date ON content_calendar(account_id, date);
+CREATE INDEX IF NOT EXISTS idx_content_calendar_community ON content_calendar(community_id);
+CREATE INDEX IF NOT EXISTS idx_content_calendar_status ON content_calendar(account_id, status);
 
 -- Add engagement tracking to community_profiles
 ALTER TABLE community_profiles ADD COLUMN IF NOT EXISTS engagement_count INTEGER DEFAULT 0;
