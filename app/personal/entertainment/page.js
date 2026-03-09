@@ -406,7 +406,7 @@ export default function EntertainmentPage() {
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 </div>
                 <p style={{ color: 'var(--red)', fontWeight: 600 }}>{feedError}</p>
-                <p className="text-xs text-muted" style={{ marginTop: 8 }}>Check that TMDB_API_KEY is set in .env and the server is running.</p>
+                <p className="text-xs text-muted" style={{ marginTop: 8 }}>Set TMDB_API_KEY in .env (free key from themoviedb.org/settings/api) and restart the server.</p>
                 <button className="btn btn-sm" style={{ marginTop: 12 }} onClick={() => loadFeed(1, false)}>Retry</button>
               </div>
             </div>
