@@ -374,4 +374,110 @@ router.get('/outreach', async (req, res) => {
   }
 });
 
+// GET /api/reports/social — today's social distribution summary
+router.get('/social', async (req, res) => {
+  try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    // Today's scheduled/published/pending posts
+    const { data: todayPosts } = await safeQuery(sb =>
+      sb.from('social_post_log')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .gte('created_at', todayStart.toISOString())
+        .order('scheduled_for', { ascending: true })
+    );
+
+    const posts = todayPosts || [];
+
+    // Yesterday's engagement data
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+    const yesterdayEnd = new Date(yesterday);
+    yesterdayEnd.setHours(23, 59, 59, 999);
+
+    const { data: yesterdayPosts } = await safeQuery(sb =>
+      sb.from('social_post_log')
+        .select('platform, product, likes, comments, shares, impressions, engagement_score, platform_post_url')
+        .eq('account_id', req.accountId)
+        .eq('status', 'published')
+        .gte('published_at', yesterday.toISOString())
+        .lte('published_at', yesterdayEnd.toISOString())
+    );
+
+    // Shadowban warnings
+    const { data: shadowbanAlerts } = await safeQuery(sb =>
+      sb.from('infra_alerts')
+        .select('service, message, details, created_at')
+        .eq('account_id', req.accountId)
+        .like('alert_type', 'social-distributor_alert')
+        .eq('resolved', false)
+        .gte('created_at', new Date(Date.now() - 48 * 3600 * 1000).toISOString())
+    );
+
+    // Group by status
+    const scheduled = posts.filter(p => p.status === 'scheduled' || p.status === 'queued');
+    const published = posts.filter(p => p.status === 'published');
+    const pending = posts.filter(p => p.status === 'queued');
+
+    // Engagement summary from yesterday
+    const engagement = {
+      totalLikes: 0, totalComments: 0, totalShares: 0,
+      byPlatform: {},
+    };
+    for (const p of (yesterdayPosts || [])) {
+      engagement.totalLikes += p.likes || 0;
+      engagement.totalComments += p.comments || 0;
+      engagement.totalShares += p.shares || 0;
+      if (!engagement.byPlatform[p.platform]) {
+        engagement.byPlatform[p.platform] = { likes: 0, comments: 0, shares: 0, posts: 0 };
+      }
+      engagement.byPlatform[p.platform].likes += p.likes || 0;
+      engagement.byPlatform[p.platform].comments += p.comments || 0;
+      engagement.byPlatform[p.platform].shares += p.shares || 0;
+      engagement.byPlatform[p.platform].posts++;
+    }
+
+    // By platform breakdown
+    const byPlatform = {};
+    for (const p of posts) {
+      if (!byPlatform[p.platform]) byPlatform[p.platform] = { scheduled: 0, published: 0, pending: 0, failed: 0 };
+      if (p.status === 'scheduled') byPlatform[p.platform].scheduled++;
+      else if (p.status === 'published') byPlatform[p.platform].published++;
+      else if (p.status === 'queued') byPlatform[p.platform].pending++;
+      else if (p.status === 'failed') byPlatform[p.platform].failed++;
+    }
+
+    res.json({
+      today: {
+        totalScheduled: scheduled.length,
+        totalPublished: published.length,
+        totalPending: pending.length,
+        byPlatform,
+        posts: posts.map(p => ({
+          id: p.id,
+          platform: p.platform,
+          product: p.product,
+          status: p.status,
+          contentPreview: p.content_preview,
+          scheduledFor: p.scheduled_for,
+          publishedAt: p.published_at,
+          platformPostUrl: p.platform_post_url,
+        })),
+      },
+      yesterdayEngagement: engagement,
+      shadowbanWarnings: (shadowbanAlerts || []).map(a => ({
+        platform: a.service?.replace('social-', ''),
+        message: a.message,
+        details: a.details,
+        detectedAt: a.created_at,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

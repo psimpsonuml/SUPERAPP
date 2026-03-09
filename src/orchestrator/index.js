@@ -199,6 +199,11 @@ class Orchestrator {
       lifecycle: {
         updates: reportData.lifecycleStats.length,
       },
+
+      social: {
+        postsScheduled: reportData.contentProduced.filter(c => c.content_type === 'social_post' && c.status === 'draft').length,
+        postsPublished: reportData.contentProduced.filter(c => c.content_type === 'social_post' && c.status === 'published').length,
+      },
     };
 
     // Store report

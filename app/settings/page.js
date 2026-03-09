@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   fetchSlider, updateSlider, updateReducedOps,
   fetchSettings, fetchBrandProfiles, fetchSendingDomains,
+  fetchConnectedAccounts, connectPlatform, disconnectPlatform, testPlatformConnection,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -63,6 +64,9 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
   const [brandProfiles, setBrandProfiles] = useState([]);
   const [domains, setDomains] = useState([]);
+  const [connectedAccounts, setConnectedAccounts] = useState([]);
+  const [connecting, setConnecting] = useState(null);
+  const [testing, setTesting] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -75,6 +79,7 @@ export default function SettingsPage() {
           fetchSettings(),
           fetchBrandProfiles(),
           fetchSendingDomains(),
+          fetchConnectedAccounts(),
         ]);
         if (results[0].status === 'fulfilled') {
           const pos = results[0].value.sliderPosition ?? 60;
@@ -91,6 +96,9 @@ export default function SettingsPage() {
         }
         if (results[3].status === 'fulfilled') {
           setDomains(results[3].value.domains || []);
+        }
+        if (results[4].status === 'fulfilled') {
+          setConnectedAccounts(results[4].value.accounts || []);
         }
       } catch (err) {
         setError(err.message);
@@ -136,8 +144,45 @@ export default function SettingsPage() {
   const changed = sliderPos !== savedPos;
   const tierKey = getTierKey(sliderPos);
 
+  async function handleConnect(platformId) {
+    setConnecting(platformId);
+    try {
+      await connectPlatform(platformId, {});
+      const updated = await fetchConnectedAccounts();
+      setConnectedAccounts(updated.accounts || []);
+    } catch (err) {
+      alert(`Failed to connect ${platformId}: ${err.message}`);
+    } finally {
+      setConnecting(null);
+    }
+  }
+
+  async function handleDisconnect(platformId) {
+    if (!confirm(`Disconnect ${platformId}?`)) return;
+    try {
+      await disconnectPlatform(platformId);
+      const updated = await fetchConnectedAccounts();
+      setConnectedAccounts(updated.accounts || []);
+    } catch (err) {
+      alert(`Failed to disconnect: ${err.message}`);
+    }
+  }
+
+  async function handleTestConnection(platformId) {
+    setTesting(platformId);
+    try {
+      const result = await testPlatformConnection(platformId);
+      alert(`${platformId}: ${result.message || result.status}`);
+    } catch (err) {
+      alert(`Test failed: ${err.message}`);
+    } finally {
+      setTesting(null);
+    }
+  }
+
   const TABS = [
     { id: 'automation', label: 'Automation' },
+    { id: 'connected', label: 'Connected Accounts' },
     { id: 'brand', label: 'Brand Voice' },
     { id: 'domains', label: 'Sending Domains' },
     { id: 'account', label: 'Account' },
@@ -304,6 +349,132 @@ export default function SettingsPage() {
                   {settings?.notification_push_endpoint ? 'Configured' : 'Not set'}
                 </span>
               </span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Connected Accounts Tab ────────────────────── */}
+      {tab === 'connected' && (
+        <>
+          <div className="card">
+            <div className="card-header">
+              <h2>Connected Accounts</h2>
+              <span className="text-sm text-muted">Platform connections for Social Distributor</span>
+            </div>
+            <p className="text-sm text-muted" style={{ marginBottom: 20 }}>
+              Connect your social media accounts to enable automated posting. Each platform requires API credentials configured via environment variables.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {connectedAccounts.map((account) => {
+                const conn = account.connections[0] || {};
+                const isConnected = conn.status === 'connected';
+                const isExpired = conn.status === 'expired' || (conn.expires_at && new Date(conn.expires_at) < new Date());
+                const isReady = conn.status === 'ready_to_connect';
+
+                const statusBadge = isConnected ? 'badge-green'
+                  : isExpired ? 'badge-yellow'
+                  : isReady ? 'badge-blue'
+                  : 'badge-red';
+                const statusText = isConnected ? 'Connected'
+                  : isExpired ? 'Expired'
+                  : isReady ? 'Ready'
+                  : 'Disconnected';
+
+                return (
+                  <div key={account.platform} className="info-block" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                      {/* Status indicator */}
+                      <span style={{
+                        display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+                        background: isConnected ? 'var(--green)' : isExpired ? 'var(--yellow)' : isReady ? 'var(--accent-hover)' : 'var(--red)',
+                        flexShrink: 0,
+                      }} />
+                      <div>
+                        <div className="font-semibold text-sm">{account.name}</div>
+                        <div className="text-xs text-muted">
+                          {conn.platform_user_name ? `@${conn.platform_user_name}` : account.authType === 'bot_token' ? 'Bot token' : 'OAuth2'}
+                          {account.requiresBusiness && !isConnected && (
+                            <span style={{ color: 'var(--yellow)', marginLeft: 8 }}>Business account required</span>
+                          )}
+                        </div>
+                        {conn.connected_at && isConnected && (
+                          <div className="text-xs text-muted">
+                            Connected {new Date(conn.connected_at).toLocaleDateString()}
+                          </div>
+                        )}
+                        {conn.last_error && !isConnected && (
+                          <div className="text-xs" style={{ color: 'var(--red)', marginTop: 2 }}>
+                            {conn.last_error}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className={`badge ${statusBadge}`}>{statusText}</span>
+
+                      {isConnected ? (
+                        <>
+                          <button
+                            className="btn btn-xs"
+                            onClick={() => handleTestConnection(account.platform)}
+                            disabled={testing === account.platform}
+                          >
+                            {testing === account.platform ? 'Testing...' : 'Test'}
+                          </button>
+                          <button
+                            className="btn btn-xs"
+                            onClick={() => handleDisconnect(account.platform)}
+                            style={{ color: 'var(--red)' }}
+                          >
+                            Disconnect
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="btn btn-xs btn-primary"
+                          onClick={() => handleConnect(account.platform)}
+                          disabled={connecting === account.platform || (!account.envConfigured && !isReady)}
+                        >
+                          {connecting === account.platform ? 'Connecting...' : isExpired ? 'Reconnect' : 'Connect'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {connectedAccounts.length === 0 && (
+              <div className="empty-state">
+                <div className="empty-state-icon">S</div>
+                <p>No platform data available.</p>
+                <p className="text-sm text-muted mt-2">
+                  Configure social platform API credentials in your environment variables to get started.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Env Var Reference */}
+          <div className="card">
+            <div className="card-header">
+              <h2>Environment Variables</h2>
+            </div>
+            <p className="text-sm text-muted" style={{ marginBottom: 12 }}>
+              Add these to your .env file to enable each platform.
+            </p>
+            <div style={{ fontFamily: 'monospace', fontSize: 12, lineHeight: 2, color: 'var(--text-secondary)' }}>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: 8 }}>Reddit</div>
+              <div>REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: 8 }}>Facebook & Instagram</div>
+              <div>FB_PAGE_ACCESS_TOKEN (per product page)</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: 8 }}>LinkedIn</div>
+              <div>LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: 8 }}>Discord</div>
+              <div>DISCORD_BOT_TOKEN</div>
             </div>
           </div>
         </>

@@ -6,7 +6,7 @@ import {
   fetchAgents, fetchHealthReport, fetchContentPerformance,
   fetchProductIntelligence, fetchApprovalStats, fetchInfraStatus,
   fetchCommunityReport, fetchBuilderIntel, fetchSeoPostsToday,
-  fetchOutreachReport,
+  fetchOutreachReport, fetchSocialReport,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -38,6 +38,7 @@ export default function ReportsPage() {
   const [builderIntel, setBuilderIntel] = useState(null);
   const [seoPosts, setSeoPosts] = useState(null);
   const [outreachReport, setOutreachReport] = useState(null);
+  const [socialReport, setSocialReport] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,6 +58,7 @@ export default function ReportsPage() {
         fetchBuilderIntel(1),
         fetchSeoPostsToday(),
         fetchOutreachReport(),
+        fetchSocialReport(),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -75,10 +77,11 @@ export default function ReportsPage() {
       setBuilderIntel(val(11));
       setSeoPosts(val(12));
       setOutreachReport(val(13));
+      setSocialReport(val(14));
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[14 + i];
+        const r = results[15 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -402,6 +405,102 @@ export default function ReportsPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Social Distributor ──────────────────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Social Distribution</h2>
+          <span className="text-sm text-muted">
+            {socialReport ? `${socialReport.today?.totalScheduled || 0} scheduled · ${socialReport.today?.totalPublished || 0} published · ${socialReport.today?.totalPending || 0} pending` : 'Loading...'}
+          </span>
+        </div>
+        {!socialReport || (socialReport.today?.totalScheduled === 0 && socialReport.today?.totalPublished === 0) ? (
+          <div className="text-sm text-muted" style={{ padding: 20 }}>No social posts scheduled or published today</div>
+        ) : (
+          <>
+            <div className="stats-row">
+              <StatBlock value={socialReport.today?.totalScheduled || 0} label="Scheduled Today" color="var(--accent)" />
+              <StatBlock value={socialReport.today?.totalPublished || 0} label="Published" color="var(--green)" />
+              <StatBlock value={socialReport.today?.totalPending || 0} label="Pending Approval" color="var(--yellow)" />
+              <StatBlock
+                value={
+                  socialReport.yesterdayEngagement
+                    ? `${socialReport.yesterdayEngagement.totalLikes + socialReport.yesterdayEngagement.totalComments + socialReport.yesterdayEngagement.totalShares}`
+                    : '0'
+                }
+                label="Yesterday Engagement"
+              />
+            </div>
+
+            {/* Platform breakdown */}
+            {socialReport.today?.byPlatform && Object.keys(socialReport.today.byPlatform).length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                  By Platform
+                </div>
+                <div className="grid-3" style={{ gap: 8 }}>
+                  {Object.entries(socialReport.today.byPlatform).map(([platform, counts]) => {
+                    const platformLabel = { reddit: 'Reddit', facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn', discord: 'Discord' }[platform] || platform;
+                    return (
+                      <div key={platform} className="info-block">
+                        <div className="font-semibold text-sm">{platformLabel}</div>
+                        <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+                          {counts.scheduled > 0 && <span style={{ marginRight: 8 }}>{counts.scheduled} scheduled</span>}
+                          {counts.published > 0 && <span style={{ color: 'var(--green)', marginRight: 8 }}>{counts.published} published</span>}
+                          {counts.pending > 0 && <span style={{ color: 'var(--yellow)', marginRight: 8 }}>{counts.pending} pending</span>}
+                          {counts.failed > 0 && <span style={{ color: 'var(--red)' }}>{counts.failed} failed</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Yesterday engagement by platform */}
+            {socialReport.yesterdayEngagement && Object.keys(socialReport.yesterdayEngagement.byPlatform || {}).length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                  Yesterday&apos;s Engagement
+                </div>
+                <div className="grid-3" style={{ gap: 8 }}>
+                  {Object.entries(socialReport.yesterdayEngagement.byPlatform).map(([platform, metrics]) => {
+                    const platformLabel = { reddit: 'Reddit', facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn', discord: 'Discord' }[platform] || platform;
+                    return (
+                      <div key={platform} className="info-block">
+                        <div className="font-semibold text-sm">{platformLabel}</div>
+                        <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+                          {metrics.posts} post{metrics.posts !== 1 ? 's' : ''} &middot;
+                          {' '}{metrics.likes} likes &middot; {metrics.comments} comments &middot; {metrics.shares} shares
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Shadowban warnings */}
+            {socialReport.shadowbanWarnings?.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div className="text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8, color: 'var(--red)' }}>
+                  Account Health Warnings
+                </div>
+                {socialReport.shadowbanWarnings.map((warning, i) => (
+                  <div key={i} className="info-block" style={{ borderLeft: '3px solid var(--red)', marginBottom: 8 }}>
+                    <div className="font-semibold text-sm" style={{ color: 'var(--red)' }}>
+                      {(warning.platform || '').charAt(0).toUpperCase() + (warning.platform || '').slice(1)} — Possible Shadowban
+                    </div>
+                    <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+                      {warning.message}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </>

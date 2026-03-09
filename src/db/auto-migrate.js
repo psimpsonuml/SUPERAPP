@@ -41,6 +41,8 @@ const REQUIRED_TABLES = [
   { table: 'book_ratings', checkCol: 'score' },
   { table: 'builder_intel', checkCol: 'intel_type' },
   { table: 'release_digest', checkCol: 'items_json' },
+  { table: 'social_connections', checkCol: 'platform' },
+  { table: 'social_post_log', checkCol: 'platform_post_url' },
 ];
 
 async function checkTable(supabase, table, checkCol) {
