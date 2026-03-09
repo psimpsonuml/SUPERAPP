@@ -480,4 +480,92 @@ router.get('/social', async (req, res) => {
   }
 });
 
+// GET /api/reports/intelligence — intelligence briefing (top opportunities + all findings)
+router.get('/intelligence', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days, 10) || 7;
+    const category = req.query.category;
+    const product = req.query.product;
+    const status = req.query.status;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    let query = getSupabase()
+      .from('intelligence_log')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .gte('date_found', since.toISOString())
+      .order('date_found', { ascending: false });
+
+    if (category) query = query.eq('category', category);
+    if (product) query = query.eq('product', product);
+    if (status) query = query.eq('status', status);
+
+    const { data, error } = await safeQuery(() => query.limit(200));
+
+    // Compute ROI-ranked top 10
+    const scored = (data || [])
+      .filter(e => e.status === 'discovered' || e.status === 'new')
+      .map(entry => {
+        const reach = entry.potential_reach || 1;
+        const relevance = entry.relevance_score || 5;
+        const cost = Math.max(entry.estimated_cost || 1, 1);
+        return { ...entry, roiScore: (reach * relevance) / cost };
+      })
+      .sort((a, b) => b.roiScore - a.roiScore)
+      .slice(0, 10);
+
+    // Stats by category
+    const byCategory = {};
+    for (const entry of (data || [])) {
+      const cat = entry.category || entry.intel_type || 'unknown';
+      if (!byCategory[cat]) byCategory[cat] = { total: 0, new: 0 };
+      byCategory[cat].total++;
+      if (entry.status === 'discovered' || entry.status === 'new') byCategory[cat].new++;
+    }
+
+    // Stats by status
+    const byStatus = {};
+    for (const entry of (data || [])) {
+      byStatus[entry.status] = (byStatus[entry.status] || 0) + 1;
+    }
+
+    res.json({
+      days,
+      total: (data || []).length,
+      byCategory,
+      byStatus,
+      topOpportunities: scored,
+      findings: data || [],
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/reports/intelligence/:id/status — update status of an intelligence entry
+router.patch('/intelligence/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    const validStatuses = ['discovered', 'contacted', 'in_progress', 'completed', 'passed', 'new'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('intelligence_log')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .eq('account_id', req.accountId)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

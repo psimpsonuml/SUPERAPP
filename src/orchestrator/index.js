@@ -204,6 +204,8 @@ class Orchestrator {
         postsScheduled: reportData.contentProduced.filter(c => c.content_type === 'social_post' && c.status === 'draft').length,
         postsPublished: reportData.contentProduced.filter(c => c.content_type === 'social_post' && c.status === 'published').length,
       },
+
+      intelligence: await this.compileIntelligenceBriefing(),
     };
 
     // Store report
@@ -214,9 +216,68 @@ class Orchestrator {
       contentProduced: report.content.total,
       agentRuns: report.agentRuns.total,
       pendingApprovals: report.approvalQueue.pending,
+      intelligenceFindings: report.intelligence.totalActive,
     });
 
     return report;
+  }
+
+  async compileIntelligenceBriefing() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { totalActive: 0, topOpportunities: [], byCategory: {} };
+
+      const supabase = getSupabase();
+
+      // Get all active (not completed/passed) intelligence entries
+      const { data: active } = await supabase
+        .from('intelligence_log')
+        .select('*')
+        .eq('account_id', this.accountId)
+        .in('status', ['discovered', 'new', 'contacted', 'in_progress'])
+        .order('date_found', { ascending: false })
+        .limit(200);
+
+      if (!active || active.length === 0) {
+        return { totalActive: 0, topOpportunities: [], byCategory: {} };
+      }
+
+      // ROI-rank top 10
+      const scored = active.map(entry => {
+        const reach = entry.potential_reach || 1;
+        const relevance = entry.relevance_score || 5;
+        const cost = Math.max(entry.estimated_cost || 1, 1);
+        return { ...entry, roiScore: (reach * relevance) / cost };
+      }).sort((a, b) => b.roiScore - a.roiScore);
+
+      const topOpportunities = scored.slice(0, 10).map(e => ({
+        name: e.name,
+        category: e.category,
+        product: e.product,
+        platform: e.platform,
+        relevanceScore: e.relevance_score,
+        potentialReach: e.potential_reach,
+        costEstimate: e.cost_estimate,
+        roiScore: Math.round(e.roiScore * 100) / 100,
+        status: e.status,
+      }));
+
+      // By category counts
+      const byCategory = {};
+      for (const entry of active) {
+        const cat = entry.category || 'unknown';
+        byCategory[cat] = (byCategory[cat] || 0) + 1;
+      }
+
+      return {
+        totalActive: active.length,
+        topOpportunities,
+        byCategory,
+      };
+    } catch (err) {
+      logger.warn(`Intelligence briefing compilation failed: ${err.message}`);
+      return { totalActive: 0, topOpportunities: [], byCategory: {} };
+    }
   }
 
   async sendCriticalAlert(agentId, errorMessage) {
