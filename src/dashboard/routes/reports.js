@@ -543,6 +543,83 @@ router.get('/intelligence', async (req, res) => {
   }
 });
 
+// GET /api/reports/video-production — today's video production summary
+router.get('/video-production', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days, 10) || 1;
+    const product = req.query.product;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
+
+    let query = getSupabase()
+      .from('video_assets')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: false });
+
+    if (product) query = query.eq('product', product);
+
+    const { data, error } = await safeQuery(() => query.limit(100));
+
+    const videos = data || [];
+
+    // Group by product
+    const byProduct = {};
+    for (const v of videos) {
+      if (!byProduct[v.product]) byProduct[v.product] = { short: 0, long: 0, pending: 0, approved: 0, published: 0 };
+      if (v.format === 'short') byProduct[v.product].short++;
+      else byProduct[v.product].long++;
+      if (v.status === 'pending_approval') byProduct[v.product].pending++;
+      else if (v.status === 'approved') byProduct[v.product].approved++;
+      else if (v.status === 'published') byProduct[v.product].published++;
+    }
+
+    // By status
+    const byStatus = {};
+    for (const v of videos) {
+      byStatus[v.status] = (byStatus[v.status] || 0) + 1;
+    }
+
+    // Quality gate stats
+    const qgStats = {
+      totalChecked: videos.length,
+      allPassed: videos.filter(v => {
+        const qg = v.quality_gate || {};
+        return qg.audioSynced && !qg.hasBlankFrames && !qg.hasSilentGaps && (qg.captionAccuracy || 0) >= 0.95;
+      }).length,
+    };
+
+    res.json({
+      days,
+      total: videos.length,
+      shortForm: videos.filter(v => v.format === 'short').length,
+      longForm: videos.filter(v => v.format === 'long').length,
+      byProduct,
+      byStatus,
+      qualityGate: qgStats,
+      videos: videos.map(v => ({
+        id: v.id,
+        product: v.product,
+        title: v.title,
+        format: v.format,
+        duration: v.duration_sec,
+        status: v.status,
+        videoUrl: v.video_url,
+        thumbnailUrl: v.thumbnail_url,
+        platforms: v.platforms,
+        hashtags: v.hashtags,
+        fileSizeBytes: v.file_size_bytes,
+        qualityGate: v.quality_gate,
+        createdAt: v.created_at,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // PATCH /api/reports/intelligence/:id/status — update status of an intelligence entry
 router.patch('/intelligence/:id/status', async (req, res) => {
   try {

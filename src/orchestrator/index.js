@@ -206,6 +206,8 @@ class Orchestrator {
       },
 
       intelligence: await this.compileIntelligenceBriefing(),
+
+      videoProduction: await this.compileVideoProductionStats(),
     };
 
     // Store report
@@ -217,6 +219,7 @@ class Orchestrator {
       agentRuns: report.agentRuns.total,
       pendingApprovals: report.approvalQueue.pending,
       intelligenceFindings: report.intelligence.totalActive,
+      videosProduced: report.videoProduction.todayCount,
     });
 
     return report;
@@ -277,6 +280,51 @@ class Orchestrator {
     } catch (err) {
       logger.warn(`Intelligence briefing compilation failed: ${err.message}`);
       return { totalActive: 0, topOpportunities: [], byCategory: {} };
+    }
+  }
+
+  async compileVideoProductionStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { todayCount: 0, byProduct: {}, byFormat: {} };
+
+      const supabase = getSupabase();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const { data: videos } = await supabase
+        .from('video_assets')
+        .select('product, format, status, duration_sec, file_size_bytes')
+        .eq('account_id', this.accountId)
+        .gte('created_at', todayStart.toISOString());
+
+      if (!videos || videos.length === 0) {
+        return { todayCount: 0, byProduct: {}, byFormat: { short: 0, long: 0 } };
+      }
+
+      const byProduct = {};
+      const byFormat = { short: 0, long: 0 };
+      let totalDuration = 0;
+
+      for (const v of videos) {
+        if (!byProduct[v.product]) byProduct[v.product] = { count: 0, pending: 0, approved: 0 };
+        byProduct[v.product].count++;
+        if (v.status === 'pending_approval') byProduct[v.product].pending++;
+        if (v.status === 'approved' || v.status === 'published') byProduct[v.product].approved++;
+
+        byFormat[v.format] = (byFormat[v.format] || 0) + 1;
+        totalDuration += v.duration_sec || 0;
+      }
+
+      return {
+        todayCount: videos.length,
+        totalDurationSec: totalDuration,
+        byProduct,
+        byFormat,
+      };
+    } catch (err) {
+      logger.warn(`Video production stats compilation failed: ${err.message}`);
+      return { todayCount: 0, byProduct: {}, byFormat: {} };
     }
   }
 
