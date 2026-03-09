@@ -60,11 +60,11 @@ CREATE TABLE IF NOT EXISTS content_memory (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_content_memory_account ON content_memory(account_id);
-CREATE INDEX idx_content_memory_product ON content_memory(account_id, product);
-CREATE INDEX idx_content_memory_hash ON content_memory(content_hash);
-CREATE INDEX idx_content_memory_published ON content_memory(published_at);
-CREATE INDEX idx_content_memory_chain ON content_memory(repurpose_chain_id);
+CREATE INDEX IF NOT EXISTS idx_content_memory_account ON content_memory(account_id);
+CREATE INDEX IF NOT EXISTS idx_content_memory_product ON content_memory(account_id, product);
+CREATE INDEX IF NOT EXISTS idx_content_memory_hash ON content_memory(content_hash);
+CREATE INDEX IF NOT EXISTS idx_content_memory_published ON content_memory(published_at);
+CREATE INDEX IF NOT EXISTS idx_content_memory_chain ON content_memory(repurpose_chain_id);
 
 CREATE TABLE IF NOT EXISTS keyword_map (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS keyword_map (
   UNIQUE(account_id, keyword, product_assigned)
 );
 
-CREATE INDEX idx_keyword_map_account ON keyword_map(account_id, product_assigned);
+CREATE INDEX IF NOT EXISTS idx_keyword_map_account ON keyword_map(account_id, product_assigned);
 
 -- ============================================================
 -- COMMUNITY & SOCIAL
@@ -116,8 +116,8 @@ CREATE TABLE IF NOT EXISTS community_profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_community_profiles_account ON community_profiles(account_id);
-CREATE INDEX idx_community_profiles_platform ON community_profiles(account_id, platform);
+CREATE INDEX IF NOT EXISTS idx_community_profiles_account ON community_profiles(account_id);
+CREATE INDEX IF NOT EXISTS idx_community_profiles_platform ON community_profiles(account_id, platform);
 
 CREATE TABLE IF NOT EXISTS content_calendar (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -145,7 +145,7 @@ CREATE TABLE IF NOT EXISTS content_calendar (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_content_calendar_date ON content_calendar(account_id, date);
+CREATE INDEX IF NOT EXISTS idx_content_calendar_date ON content_calendar(account_id, date);
 
 -- ============================================================
 -- OUTREACH & CRM
@@ -181,12 +181,12 @@ CREATE TABLE IF NOT EXISTS prospect_pipeline (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_prospect_pipeline_account ON prospect_pipeline(account_id);
-CREATE INDEX idx_prospect_pipeline_stage ON prospect_pipeline(account_id, stage);
-CREATE INDEX idx_prospect_pipeline_track ON prospect_pipeline(account_id, track);
-CREATE INDEX idx_prospect_pipeline_source_url ON prospect_pipeline(account_id, source_url);
-CREATE INDEX idx_prospect_pipeline_platform ON prospect_pipeline(account_id, platform);
-CREATE INDEX idx_prospect_pipeline_created ON prospect_pipeline(account_id, product, created_at);
+CREATE INDEX IF NOT EXISTS idx_prospect_pipeline_account ON prospect_pipeline(account_id);
+CREATE INDEX IF NOT EXISTS idx_prospect_pipeline_stage ON prospect_pipeline(account_id, stage);
+CREATE INDEX IF NOT EXISTS idx_prospect_pipeline_track ON prospect_pipeline(account_id, track);
+CREATE INDEX IF NOT EXISTS idx_prospect_pipeline_source_url ON prospect_pipeline(account_id, source_url);
+CREATE INDEX IF NOT EXISTS idx_prospect_pipeline_platform ON prospect_pipeline(account_id, platform);
+CREATE INDEX IF NOT EXISTS idx_prospect_pipeline_created ON prospect_pipeline(account_id, product, created_at);
 
 CREATE TABLE IF NOT EXISTS sending_domains (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -233,8 +233,8 @@ CREATE TABLE IF NOT EXISTS pain_points (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_pain_points_account ON pain_points(account_id);
-CREATE INDEX idx_pain_points_product ON pain_points(account_id, product_relevance);
+CREATE INDEX IF NOT EXISTS idx_pain_points_account ON pain_points(account_id);
+CREATE INDEX IF NOT EXISTS idx_pain_points_product ON pain_points(account_id, product_relevance);
 
 CREATE TABLE IF NOT EXISTS product_intelligence (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -252,8 +252,8 @@ CREATE TABLE IF NOT EXISTS product_intelligence (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_product_intelligence_account ON product_intelligence(account_id, product);
-CREATE INDEX idx_product_intelligence_status ON product_intelligence(account_id, status);
+CREATE INDEX IF NOT EXISTS idx_product_intelligence_account ON product_intelligence(account_id, product);
+CREATE INDEX IF NOT EXISTS idx_product_intelligence_status ON product_intelligence(account_id, status);
 
 CREATE TABLE IF NOT EXISTS intelligence_log (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -285,7 +285,7 @@ CREATE TABLE IF NOT EXISTS qa_results (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_qa_results_date ON qa_results(account_id, test_date);
+CREATE INDEX IF NOT EXISTS idx_qa_results_date ON qa_results(account_id, test_date);
 
 -- ============================================================
 -- APPROVAL QUEUE
@@ -307,9 +307,9 @@ CREATE TABLE IF NOT EXISTS approval_queue (
   reviewed_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_approval_queue_account ON approval_queue(account_id);
-CREATE INDEX idx_approval_queue_status ON approval_queue(account_id, status);
-CREATE INDEX idx_approval_queue_agent ON approval_queue(account_id, agent_id);
+CREATE INDEX IF NOT EXISTS idx_approval_queue_account ON approval_queue(account_id);
+CREATE INDEX IF NOT EXISTS idx_approval_queue_status ON approval_queue(account_id, status);
+CREATE INDEX IF NOT EXISTS idx_approval_queue_agent ON approval_queue(account_id, agent_id);
 
 -- ============================================================
 -- USER LIFECYCLE
@@ -336,8 +336,8 @@ CREATE TABLE IF NOT EXISTS user_lifecycle (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_user_lifecycle_account ON user_lifecycle(account_id, product);
-CREATE INDEX idx_user_lifecycle_stage ON user_lifecycle(account_id, drip_stage);
+CREATE INDEX IF NOT EXISTS idx_user_lifecycle_account ON user_lifecycle(account_id, product);
+CREATE INDEX IF NOT EXISTS idx_user_lifecycle_stage ON user_lifecycle(account_id, drip_stage);
 
 -- ============================================================
 -- SEASONAL & EVENT CALENDAR
@@ -355,7 +355,7 @@ CREATE TABLE IF NOT EXISTS event_calendar (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_event_calendar_dates ON event_calendar(account_id, start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_event_calendar_dates ON event_calendar(account_id, start_date, end_date);
 
 -- ============================================================
 -- AGENT RUNS & INFRASTRUCTURE
@@ -376,9 +376,9 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_agent_runs_account ON agent_runs(account_id);
-CREATE INDEX idx_agent_runs_agent ON agent_runs(account_id, agent_id);
-CREATE INDEX idx_agent_runs_status ON agent_runs(status);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_account ON agent_runs(account_id);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_agent ON agent_runs(account_id, agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
 
 CREATE TABLE IF NOT EXISTS infra_alerts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -394,8 +394,8 @@ CREATE TABLE IF NOT EXISTS infra_alerts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_infra_alerts_severity ON infra_alerts(account_id, severity);
-CREATE INDEX idx_infra_alerts_resolved ON infra_alerts(account_id, resolved);
+CREATE INDEX IF NOT EXISTS idx_infra_alerts_severity ON infra_alerts(account_id, severity);
+CREATE INDEX IF NOT EXISTS idx_infra_alerts_resolved ON infra_alerts(account_id, resolved);
 
 CREATE TABLE IF NOT EXISTS infra_check_results (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -429,9 +429,9 @@ CREATE TABLE IF NOT EXISTS outreach_sends (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_outreach_sends_account ON outreach_sends(account_id);
-CREATE INDEX idx_outreach_sends_prospect ON outreach_sends(prospect_id);
-CREATE INDEX idx_outreach_sends_date ON outreach_sends(account_id, sent_at);
+CREATE INDEX IF NOT EXISTS idx_outreach_sends_account ON outreach_sends(account_id);
+CREATE INDEX IF NOT EXISTS idx_outreach_sends_prospect ON outreach_sends(prospect_id);
+CREATE INDEX IF NOT EXISTS idx_outreach_sends_date ON outreach_sends(account_id, sent_at);
 
 -- ============================================================
 -- ENTERTAINMENT MODULE
