@@ -51,6 +51,10 @@ const config = {
     provider: process.env.IMAGE_GEN_PROVIDER || 'openai',
   },
 
+  substack: {
+    publishEmail: process.env.SUBSTACK_PUBLISH_EMAIL,
+  },
+
   spotify: {
     clientId: process.env.SPOTIFY_CLIENT_ID,
     clientSecret: process.env.SPOTIFY_CLIENT_SECRET,

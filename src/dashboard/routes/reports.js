@@ -543,6 +543,102 @@ router.get('/intelligence', async (req, res) => {
   }
 });
 
+// GET /api/reports/newsletter — newsletter edition stats and recent editions
+router.get('/newsletter', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days, 10) || 7;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
+
+    const { data, error } = await safeQuery(() =>
+      getSupabase()
+        .from('newsletter_editions')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .gte('created_at', since.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(30)
+    );
+
+    const editions = data || [];
+
+    // Today's edition
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEdition = editions.find(e => new Date(e.created_at) >= todayStart);
+
+    // By status
+    const byStatus = {};
+    for (const e of editions) {
+      byStatus[e.status] = (byStatus[e.status] || 0) + 1;
+    }
+
+    // Average open rate (from editions that have it)
+    const withOpenRate = editions.filter(e => e.open_rate != null);
+    const avgOpenRate = withOpenRate.length > 0
+      ? withOpenRate.reduce((sum, e) => sum + Number(e.open_rate), 0) / withOpenRate.length
+      : null;
+
+    res.json({
+      days,
+      total: editions.length,
+      byStatus,
+      avgOpenRate: avgOpenRate ? Math.round(avgOpenRate * 100) / 100 : null,
+      today: todayEdition ? {
+        id: todayEdition.id,
+        subjectLine: todayEdition.subject_line,
+        wordCount: todayEdition.word_count,
+        status: todayEdition.status,
+        themeType: todayEdition.theme_type,
+        publishMethod: todayEdition.publish_method,
+        openRate: todayEdition.open_rate,
+        headerImageUrl: todayEdition.header_image_url,
+        createdAt: todayEdition.created_at,
+        publishedAt: todayEdition.published_at,
+      } : null,
+      recentEditions: editions.map(e => ({
+        id: e.id,
+        subjectLine: e.subject_line,
+        wordCount: e.word_count,
+        status: e.status,
+        themeType: e.theme_type,
+        openRate: e.open_rate,
+        subscriberCount: e.subscriber_count,
+        createdAt: e.created_at,
+        publishedAt: e.published_at,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/reports/newsletter/:id/stats — update open rate and subscriber count
+router.patch('/newsletter/:id/stats', async (req, res) => {
+  try {
+    const { open_rate, subscriber_count } = req.body;
+    const updates = { updated_at: new Date().toISOString() };
+    if (open_rate != null) updates.open_rate = open_rate;
+    if (subscriber_count != null) updates.subscriber_count = subscriber_count;
+
+    const { data, error } = await safeQuery(() =>
+      getSupabase()
+        .from('newsletter_editions')
+        .update(updates)
+        .eq('id', req.params.id)
+        .eq('account_id', req.accountId)
+        .select('id, open_rate, subscriber_count')
+        .single()
+    );
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/reports/video-production — today's video production summary
 router.get('/video-production', async (req, res) => {
   try {

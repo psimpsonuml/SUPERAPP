@@ -205,6 +205,8 @@ class Orchestrator {
         postsPublished: reportData.contentProduced.filter(c => c.content_type === 'social_post' && c.status === 'published').length,
       },
 
+      newsletter: await this.compileNewsletterStats(),
+
       intelligence: await this.compileIntelligenceBriefing(),
 
       videoProduction: await this.compileVideoProductionStats(),
@@ -218,11 +220,60 @@ class Orchestrator {
       contentProduced: report.content.total,
       agentRuns: report.agentRuns.total,
       pendingApprovals: report.approvalQueue.pending,
+      newsletterStatus: report.newsletter.status,
       intelligenceFindings: report.intelligence.totalActive,
       videosProduced: report.videoProduction.todayCount,
     });
 
     return report;
+  }
+
+  async compileNewsletterStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { status: 'no_data', today: null };
+
+      const supabase = getSupabase();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const { data: todayEdition } = await supabase
+        .from('newsletter_editions')
+        .select('subject_line, word_count, status, theme_type, publish_method, open_rate, published_at')
+        .eq('account_id', this.accountId)
+        .gte('created_at', todayStart.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      // Yesterday's open rate
+      const yesterdayStart = new Date(todayStart);
+      yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+      const { data: yesterdayEdition } = await supabase
+        .from('newsletter_editions')
+        .select('subject_line, open_rate, subscriber_count')
+        .eq('account_id', this.accountId)
+        .gte('created_at', yesterdayStart.toISOString())
+        .lt('created_at', todayStart.toISOString())
+        .limit(1);
+
+      const today = todayEdition?.[0] || null;
+      const yesterday = yesterdayEdition?.[0] || null;
+
+      return {
+        status: today ? today.status : 'not_generated',
+        today: today ? {
+          subjectLine: today.subject_line,
+          wordCount: today.word_count,
+          themeType: today.theme_type,
+          publishMethod: today.publish_method,
+        } : null,
+        yesterdayOpenRate: yesterday?.open_rate || null,
+        yesterdaySubject: yesterday?.subject_line || null,
+      };
+    } catch (err) {
+      logger.warn(`Newsletter stats compilation failed: ${err.message}`);
+      return { status: 'error', today: null };
+    }
   }
 
   async compileIntelligenceBriefing() {
