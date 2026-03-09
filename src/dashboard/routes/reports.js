@@ -130,23 +130,152 @@ router.get('/pipeline', async (req, res) => {
   }
 });
 
-// GET /api/reports/product-intelligence — product intelligence summary
+// GET /api/reports/product-intelligence — product intelligence with filters
 router.get('/product-intelligence', async (req, res) => {
   try {
-    const product = req.query.product;
+    const { product, status, rec_type, tab, days } = req.query;
+    const limit = parseInt(req.query.limit, 10) || 100;
 
-    const { data } = await safeQuery(sb => {
-      let query = sb
-        .from('product_intelligence')
-        .select('*')
-        .eq('account_id', req.accountId)
-        .neq('status', 'stays')
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (product) query = query.eq('product', product);
-      return query;
+    let query = getSupabase()
+      .from('product_intelligence')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .order('created_at', { ascending: false });
+
+    // Tab-based filtering
+    if (tab === 'today') {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      query = query.in('status', ['new', 'reviewed']).gte('created_at', todayStart.toISOString());
+    } else if (tab === 'backlog') {
+      query = query.eq('status', 'accepted');
+    } else if (tab === 'history') {
+      // All items, optionally filtered
+    } else {
+      // Default: exclude snoozed
+      query = query.neq('status', 'snoozed');
+    }
+
+    if (product) query = query.eq('product', product);
+    if (status) query = query.eq('status', status);
+    if (rec_type) query = query.eq('rec_type', rec_type);
+
+    if (days) {
+      const since = new Date();
+      since.setDate(since.getDate() - parseInt(days, 10));
+      query = query.gte('created_at', since.toISOString());
+    }
+
+    const { data, error } = await safeQuery(() => query.limit(limit));
+    const recs = data || [];
+
+    // Stats
+    const allQuery = getSupabase()
+      .from('product_intelligence')
+      .select('status, product, rec_type, impact_estimate, snoozed_until')
+      .eq('account_id', req.accountId);
+    const { data: allRecs } = await safeQuery(() => allQuery.limit(500));
+    const all = allRecs || [];
+
+    const byStatus = {};
+    const byProduct = {};
+    const snoozedCount = all.filter(r => r.status === 'snoozed').length;
+    const snoozedExpiringThisWeek = all.filter(r => {
+      if (r.status !== 'snoozed' || !r.snoozed_until) return false;
+      const weekFromNow = new Date();
+      weekFromNow.setDate(weekFromNow.getDate() + 7);
+      return new Date(r.snoozed_until) <= weekFromNow;
+    }).length;
+
+    for (const r of all) {
+      byStatus[r.status] = (byStatus[r.status] || 0) + 1;
+      if (!byProduct[r.product]) byProduct[r.product] = { total: 0, new: 0, accepted: 0 };
+      byProduct[r.product].total++;
+      if (r.status === 'new') byProduct[r.product].new++;
+      if (r.status === 'accepted') byProduct[r.product].accepted++;
+    }
+
+    // Top 3 highest-impact new recommendations
+    const topImpact = all
+      .filter(r => r.status === 'new' && r.impact_estimate === 'high')
+      .slice(0, 3);
+
+    res.json({
+      recommendations: recs,
+      stats: {
+        total: all.length,
+        byStatus,
+        byProduct,
+        snoozedCount,
+        snoozedExpiringThisWeek,
+        topImpact,
+      },
     });
-    res.json({ recommendations: data || [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/reports/product-intelligence/:id/accept — accept recommendation
+router.patch('/product-intelligence/:id/accept', async (req, res) => {
+  try {
+    const { data, error } = await safeQuery(() =>
+      getSupabase()
+        .from('product_intelligence')
+        .update({ status: 'accepted', snoozed_until: null, updated_at: new Date().toISOString() })
+        .eq('id', req.params.id)
+        .eq('account_id', req.accountId)
+        .select('id, status')
+        .single()
+    );
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/reports/product-intelligence/:id/reject — reject recommendation
+router.patch('/product-intelligence/:id/reject', async (req, res) => {
+  try {
+    const { data, error } = await safeQuery(() =>
+      getSupabase()
+        .from('product_intelligence')
+        .update({ status: 'rejected', snoozed_until: null, updated_at: new Date().toISOString() })
+        .eq('id', req.params.id)
+        .eq('account_id', req.accountId)
+        .select('id, status')
+        .single()
+    );
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/reports/product-intelligence/:id/snooze — snooze for 30 days
+router.patch('/product-intelligence/:id/snooze', async (req, res) => {
+  try {
+    const snoozeDays = parseInt(req.body.days, 10) || 30;
+    const snoozedUntil = new Date();
+    snoozedUntil.setDate(snoozedUntil.getDate() + snoozeDays);
+
+    const { data, error } = await safeQuery(() =>
+      getSupabase()
+        .from('product_intelligence')
+        .update({
+          status: 'snoozed',
+          snoozed_until: snoozedUntil.toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', req.params.id)
+        .eq('account_id', req.accountId)
+        .select('id, status, snoozed_until')
+        .single()
+    );
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

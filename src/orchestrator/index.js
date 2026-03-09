@@ -210,6 +210,8 @@ class Orchestrator {
       intelligence: await this.compileIntelligenceBriefing(),
 
       videoProduction: await this.compileVideoProductionStats(),
+
+      productIntelligence: await this.compileProductIntelligenceStats(),
     };
 
     // Store report
@@ -223,6 +225,7 @@ class Orchestrator {
       newsletterStatus: report.newsletter.status,
       intelligenceFindings: report.intelligence.totalActive,
       videosProduced: report.videoProduction.todayCount,
+      newRecommendations: report.productIntelligence.newToday,
     });
 
     return report;
@@ -376,6 +379,65 @@ class Orchestrator {
     } catch (err) {
       logger.warn(`Video production stats compilation failed: ${err.message}`);
       return { todayCount: 0, byProduct: {}, byFormat: {} };
+    }
+  }
+
+  async compileProductIntelligenceStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { newToday: 0, byProduct: {}, topRecommendations: [], snoozedExpiringThisWeek: 0, pricingAlerts: 0 };
+
+      const supabase = getSupabase();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      // Today's new recommendations
+      const { data: todayRecs } = await supabase
+        .from('product_intelligence')
+        .select('product, rec_type, title, impact_estimate')
+        .eq('account_id', this.accountId)
+        .eq('status', 'new')
+        .gte('created_at', todayStart.toISOString());
+
+      const newRecs = todayRecs || [];
+
+      // By product
+      const byProduct = {};
+      for (const r of newRecs) {
+        byProduct[r.product] = (byProduct[r.product] || 0) + 1;
+      }
+
+      // Top 3 highest-impact
+      const impactOrder = { high: 3, medium: 2, low: 1 };
+      const topRecommendations = [...newRecs]
+        .sort((a, b) => (impactOrder[b.impact_estimate] || 0) - (impactOrder[a.impact_estimate] || 0))
+        .slice(0, 3)
+        .map(r => ({ product: r.product, title: r.title, impact: r.impact_estimate }));
+
+      // Snoozed items expiring this week
+      const weekFromNow = new Date();
+      weekFromNow.setDate(weekFromNow.getDate() + 7);
+      const { data: expiring } = await supabase
+        .from('product_intelligence')
+        .select('id')
+        .eq('account_id', this.accountId)
+        .eq('status', 'snoozed')
+        .lte('snoozed_until', weekFromNow.toISOString())
+        .gte('snoozed_until', new Date().toISOString());
+
+      // Pricing alerts
+      const pricingAlerts = newRecs.filter(r => r.rec_type === 'pricing').length;
+
+      return {
+        newToday: newRecs.length,
+        byProduct,
+        topRecommendations,
+        snoozedExpiringThisWeek: expiring?.length || 0,
+        pricingAlerts,
+      };
+    } catch (err) {
+      logger.warn(`Product intelligence stats compilation failed: ${err.message}`);
+      return { newToday: 0, byProduct: {}, topRecommendations: [], snoozedExpiringThisWeek: 0, pricingAlerts: 0 };
     }
   }
 
