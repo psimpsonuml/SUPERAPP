@@ -70,14 +70,15 @@ CREATE TABLE IF NOT EXISTS keyword_map (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   keyword TEXT NOT NULL,
-  product_assigned TEXT NOT NULL,
+  product_assigned TEXT NOT NULL DEFAULT 'unknown',
   last_used TIMESTAMPTZ,
-  search_volume INTEGER DEFAULT 0,
-  difficulty REAL DEFAULT 0,
+  search_volume_estimate INTEGER DEFAULT 0,
+  difficulty_estimate INTEGER DEFAULT 50,
   current_ranking INTEGER,
+  next_eligible TIMESTAMPTZ,
   status TEXT NOT NULL DEFAULT 'available',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(account_id, keyword)
+  UNIQUE(account_id, keyword, product_assigned)
 );
 
 CREATE INDEX idx_keyword_map_account ON keyword_map(account_id, product_assigned);
@@ -92,12 +93,24 @@ CREATE TABLE IF NOT EXISTS community_profiles (
   platform TEXT NOT NULL,
   name TEXT NOT NULL,
   url TEXT,
+  description TEXT,
+  subscriber_count INTEGER,
+  activity_score NUMERIC(3,1) DEFAULT 0,
+  overall_score NUMERIC(3,1) DEFAULT 0,
+  product TEXT,
   rules_json JSONB NOT NULL DEFAULT '{}',
+  rule_friendliness TEXT DEFAULT 'unknown',
   classification TEXT NOT NULL DEFAULT 'unknown',
   relevance_score REAL DEFAULT 0,
   products_relevant JSONB NOT NULL DEFAULT '[]',
   self_promo_policy TEXT,
   frequency_limits JSONB NOT NULL DEFAULT '{}',
+  posts_per_day NUMERIC(8,2),
+  active_users INTEGER,
+  metadata_json JSONB DEFAULT '{}',
+  engagement_count INTEGER DEFAULT 0,
+  first_engaged_at TIMESTAMPTZ,
+  warmup_complete BOOLEAN DEFAULT FALSE,
   last_scanned TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -109,19 +122,30 @@ CREATE INDEX idx_community_profiles_platform ON community_profiles(account_id, p
 CREATE TABLE IF NOT EXISTS content_calendar (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  scheduled_date DATE NOT NULL,
+  date DATE NOT NULL,
   product TEXT NOT NULL,
   platform TEXT NOT NULL,
   community_id UUID REFERENCES community_profiles(id),
-  post_type TEXT NOT NULL,
+  community_name TEXT,
+  post_type TEXT NOT NULL CHECK (post_type IN (
+    'value_post', 'value_post_with_mention', 'promo_thread_entry',
+    'value_engagement', 'question_answer', 'comment_engagement',
+    'warmup_comment', 'warmup_upvote', 'manual_review',
+    'builder_promo', 'builder_x_post'
+  )),
   content_preview TEXT,
+  content_theme TEXT,
+  content_draft TEXT,
+  rules_summary TEXT,
   content_id UUID REFERENCES content_memory(id),
   status TEXT NOT NULL DEFAULT 'scheduled',
   approval_tier INTEGER NOT NULL DEFAULT 2,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  metadata_json JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_content_calendar_date ON content_calendar(account_id, scheduled_date);
+CREATE INDEX idx_content_calendar_date ON content_calendar(account_id, date);
 
 -- ============================================================
 -- OUTREACH & CRM
@@ -145,6 +169,10 @@ CREATE TABLE IF NOT EXISTS prospect_pipeline (
     'identified', 'pitch_drafted', 'pitched', 'in_discussion', 'evaluating', 'partnership_active', 'declined'
   )),
   source TEXT,
+  source_url TEXT,
+  platform TEXT,
+  drafted_email JSONB,
+  sent_via TEXT,
   last_contacted TIMESTAMPTZ,
   touch_count INTEGER NOT NULL DEFAULT 0,
   notes TEXT,
@@ -156,6 +184,9 @@ CREATE TABLE IF NOT EXISTS prospect_pipeline (
 CREATE INDEX idx_prospect_pipeline_account ON prospect_pipeline(account_id);
 CREATE INDEX idx_prospect_pipeline_stage ON prospect_pipeline(account_id, stage);
 CREATE INDEX idx_prospect_pipeline_track ON prospect_pipeline(account_id, track);
+CREATE INDEX idx_prospect_pipeline_source_url ON prospect_pipeline(account_id, source_url);
+CREATE INDEX idx_prospect_pipeline_platform ON prospect_pipeline(account_id, platform);
+CREATE INDEX idx_prospect_pipeline_created ON prospect_pipeline(account_id, product, created_at);
 
 CREATE TABLE IF NOT EXISTS sending_domains (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -181,13 +212,25 @@ CREATE TABLE IF NOT EXISTS pain_points (
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   source TEXT NOT NULL,
   source_url TEXT,
+  subreddit TEXT,
+  title TEXT,
   text TEXT NOT NULL,
+  product TEXT,
   product_relevance TEXT NOT NULL,
+  classification TEXT DEFAULT 'pain_point',
+  score INTEGER DEFAULT 0,
   urgency TEXT NOT NULL DEFAULT 'low' CHECK (urgency IN ('low', 'medium', 'high', 'critical')),
   category TEXT,
   action_taken TEXT,
+  drafted_response TEXT,
+  response_mentions_product BOOLEAN DEFAULT FALSE,
+  reddit_author TEXT,
+  reddit_score INTEGER,
+  reddit_num_comments INTEGER,
+  metadata_json JSONB DEFAULT '{}',
   date_found TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_pain_points_account ON pain_points(account_id);
@@ -343,6 +386,7 @@ CREATE TABLE IF NOT EXISTS infra_alerts (
   alert_type TEXT NOT NULL,
   severity TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'critical')),
   service TEXT NOT NULL,
+  product TEXT,
   message TEXT NOT NULL,
   details JSONB NOT NULL DEFAULT '{}',
   resolved BOOLEAN NOT NULL DEFAULT FALSE,
@@ -352,6 +396,253 @@ CREATE TABLE IF NOT EXISTS infra_alerts (
 
 CREATE INDEX idx_infra_alerts_severity ON infra_alerts(account_id, severity);
 CREATE INDEX idx_infra_alerts_resolved ON infra_alerts(account_id, resolved);
+
+CREATE TABLE IF NOT EXISTS infra_check_results (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  service TEXT NOT NULL,
+  check_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'healthy',
+  response_time_ms INTEGER,
+  message TEXT,
+  details JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- OUTREACH TRACKING
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS outreach_sends (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  prospect_id UUID NOT NULL REFERENCES prospect_pipeline(id) ON DELETE CASCADE,
+  product TEXT NOT NULL,
+  track TEXT NOT NULL DEFAULT 'user',
+  sending_domain TEXT,
+  mailbox_email TEXT,
+  subject TEXT,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  opened_at TIMESTAMPTZ,
+  replied_at TIMESTAMPTZ,
+  bounced BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_outreach_sends_account ON outreach_sends(account_id);
+CREATE INDEX idx_outreach_sends_prospect ON outreach_sends(prospect_id);
+CREATE INDEX idx_outreach_sends_date ON outreach_sends(account_id, sent_at);
+
+-- ============================================================
+-- ENTERTAINMENT MODULE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS entertainment_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  tmdb_id INTEGER,
+  title TEXT NOT NULL,
+  item_type TEXT NOT NULL DEFAULT 'movie',
+  year INTEGER,
+  poster_path TEXT,
+  overview TEXT,
+  genres JSONB DEFAULT '[]',
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(account_id, title, item_type),
+  UNIQUE(account_id, tmdb_id, item_type)
+);
+
+CREATE TABLE IF NOT EXISTS entertainment_ratings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  item_id UUID NOT NULL REFERENCES entertainment_items(id) ON DELETE CASCADE,
+  score INTEGER NOT NULL CHECK (score >= 1 AND score <= 10),
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(account_id, item_id)
+);
+
+CREATE TABLE IF NOT EXISTS entertainment_people (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  item_id UUID NOT NULL REFERENCES entertainment_items(id) ON DELETE CASCADE,
+  person_name TEXT NOT NULL,
+  tmdb_person_id INTEGER,
+  role TEXT NOT NULL,
+  profile_path TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(account_id, item_id, person_name, role)
+);
+
+CREATE TABLE IF NOT EXISTS cascade_scores (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  person_name TEXT NOT NULL,
+  tmdb_person_id INTEGER,
+  primary_role TEXT NOT NULL,
+  composite_score NUMERIC(5,2) NOT NULL DEFAULT 0,
+  weighted_sum NUMERIC(8,2) NOT NULL DEFAULT 0,
+  weight_total NUMERIC(8,2) NOT NULL DEFAULT 0,
+  ratings_count INTEGER NOT NULL DEFAULT 0,
+  item_type TEXT NOT NULL DEFAULT 'movie',
+  source_type TEXT NOT NULL DEFAULT 'entertainment',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(account_id, person_name, primary_role, item_type)
+);
+
+-- ============================================================
+-- QUIZ MODULE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS quiz_questions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  category TEXT NOT NULL,
+  question_text TEXT NOT NULL,
+  answer_type TEXT NOT NULL DEFAULT 'multiple_choice',
+  options JSONB DEFAULT '[]',
+  metadata JSONB DEFAULT '{}',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  reask_days INTEGER DEFAULT NULL,
+  dimension TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(question_text)
+);
+
+CREATE TABLE IF NOT EXISTS quiz_answers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  question_id UUID NOT NULL REFERENCES quiz_questions(id) ON DELETE CASCADE,
+  answer TEXT NOT NULL,
+  answered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  previous_answer TEXT,
+  previous_answered_at TIMESTAMPTZ,
+  UNIQUE(account_id, question_id)
+);
+
+CREATE TABLE IF NOT EXISTS quiz_profile (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  dimension TEXT NOT NULL,
+  category TEXT NOT NULL,
+  score NUMERIC(5,2) NOT NULL DEFAULT 0,
+  description TEXT,
+  computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(account_id, dimension)
+);
+
+-- ============================================================
+-- LIFE MANAGER MODULE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS reminders (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  frequency TEXT NOT NULL DEFAULT 'daily',
+  days_of_week JSONB DEFAULT '[]',
+  custom_interval_days INTEGER,
+  time_of_day TIME NOT NULL DEFAULT '09:00',
+  category TEXT NOT NULL DEFAULT 'personal',
+  active BOOLEAN NOT NULL DEFAULT true,
+  streak INTEGER NOT NULL DEFAULT 0,
+  longest_streak INTEGER NOT NULL DEFAULT 0,
+  last_completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS reminder_completions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  reminder_id UUID NOT NULL REFERENCES reminders(id) ON DELETE CASCADE,
+  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  status TEXT NOT NULL DEFAULT 'completed',
+  UNIQUE(reminder_id, completed_date)
+);
+
+CREATE TABLE IF NOT EXISTS family_log (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  entry_text TEXT NOT NULL,
+  photo_url TEXT,
+  child_tag TEXT,
+  category TEXT NOT NULL DEFAULT 'general',
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- BOOKS MODULE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS book_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  open_library_id TEXT,
+  title TEXT NOT NULL,
+  author TEXT,
+  year INTEGER,
+  genre TEXT,
+  cover_url TEXT,
+  page_count INTEGER,
+  description TEXT,
+  metadata_json JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(account_id, open_library_id),
+  UNIQUE(account_id, title, author)
+);
+
+CREATE TABLE IF NOT EXISTS book_ratings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  book_id UUID NOT NULL REFERENCES book_items(id) ON DELETE CASCADE,
+  score INTEGER CHECK (score >= 1 AND score <= 10),
+  status TEXT NOT NULL DEFAULT 'rated',
+  notes TEXT,
+  rated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(account_id, book_id)
+);
+
+-- ============================================================
+-- BUILDER INTEL
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS builder_intel (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id),
+  source TEXT NOT NULL,
+  source_url TEXT,
+  title TEXT,
+  summary TEXT,
+  product_relevance TEXT,
+  intel_type TEXT NOT NULL,
+  relevance_score INTEGER DEFAULT 0,
+  author TEXT,
+  metadata_json JSONB DEFAULT '{}',
+  date_found TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (account_id, source_url)
+);
+
+-- ============================================================
+-- RELEASES CACHE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS releases_cache (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  week_start DATE NOT NULL,
+  data JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(account_id, week_start)
+);
 
 -- ============================================================
 -- ROW LEVEL SECURITY (Multi-Tenant Isolation)
@@ -373,6 +664,22 @@ ALTER TABLE user_lifecycle ENABLE ROW LEVEL SECURITY;
 ALTER TABLE event_calendar ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE infra_alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE infra_check_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE outreach_sends ENABLE ROW LEVEL SECURITY;
+ALTER TABLE entertainment_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE entertainment_ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE entertainment_people ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cascade_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quiz_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quiz_answers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quiz_profile ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reminder_completions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE family_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE book_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE book_ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE builder_intel ENABLE ROW LEVEL SECURITY;
+ALTER TABLE releases_cache ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies: service role bypasses, authenticated users see only their account
 CREATE POLICY account_isolation ON brand_profiles FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
@@ -391,3 +698,18 @@ CREATE POLICY account_isolation ON user_lifecycle FOR ALL USING (account_id = cu
 CREATE POLICY account_isolation ON event_calendar FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
 CREATE POLICY account_isolation ON agent_runs FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
 CREATE POLICY account_isolation ON infra_alerts FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON infra_check_results FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON outreach_sends FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON entertainment_items FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON entertainment_ratings FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON entertainment_people FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON cascade_scores FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON quiz_answers FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON quiz_profile FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON reminders FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON reminder_completions FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON family_log FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON book_items FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON book_ratings FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON builder_intel FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON releases_cache FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
