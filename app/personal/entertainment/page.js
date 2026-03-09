@@ -157,6 +157,7 @@ export default function EntertainmentPage() {
   const [justRated, setJustRated] = useState(null);
 
   const [ratedIds, setRatedIds] = useState(new Set());
+  const [feedError, setFeedError] = useState(null);
 
   const [ratings, setRatings] = useState([]);
   const [cascade, setCascade] = useState([]);
@@ -173,6 +174,7 @@ export default function EntertainmentPage() {
   // Load feed
   const loadFeed = useCallback(async (page = 1, append = false) => {
     setFeedLoading(true);
+    setFeedError(null);
     try {
       const params = { feed, page, media_type: mediaType };
       if (genreFilter) params.genre = genreFilter;
@@ -185,8 +187,9 @@ export default function EntertainmentPage() {
         setCurrentIndex(0);
       }
       setFeedPage(page);
-    } catch {
-      // silently fail
+    } catch (err) {
+      console.error('[Entertainment] Feed load failed:', err);
+      setFeedError(err.message || 'Failed to load feed');
     } finally {
       setFeedLoading(false);
     }
@@ -269,12 +272,14 @@ export default function EntertainmentPage() {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     setSearchLoading(true);
+    setFeedError(null);
     try {
       const result = await tmdbSearch(searchQuery, { media_type: mediaType });
       setSearchResults(result.results || []);
       setCurrentIndex(0);
-    } catch {
-      // silently fail
+    } catch (err) {
+      console.error('[Entertainment] Search failed:', err);
+      setFeedError(err.message || 'Search failed');
     } finally {
       setSearchLoading(false);
     }
@@ -394,6 +399,17 @@ export default function EntertainmentPage() {
           {/* Card / Loading / Empty */}
           {isLoading && !hasItems ? (
             <div className="loading"><div className="spinner" />Loading {searchMode ? 'results' : 'feed'}...</div>
+          ) : feedError ? (
+            <div className="card">
+              <div className="empty-state">
+                <div className="empty-state-icon" style={{ color: 'var(--red)' }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </div>
+                <p style={{ color: 'var(--red)', fontWeight: 600 }}>{feedError}</p>
+                <p className="text-xs text-muted" style={{ marginTop: 8 }}>Check that TMDB_API_KEY is set in .env and the server is running.</p>
+                <button className="btn btn-sm" style={{ marginTop: 12 }} onClick={() => loadFeed(1, false)}>Retry</button>
+              </div>
+            </div>
           ) : !hasItems ? (
             <div className="card">
               <div className="empty-state">

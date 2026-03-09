@@ -12,13 +12,23 @@ function tmdbKey() {
 
 async function tmdbFetch(path, params = {}) {
   const key = tmdbKey();
-  if (!key) throw new Error('TMDB_API_KEY not configured');
+  if (!key) {
+    console.error('[TMDB] TMDB_API_KEY not configured — set it in .env');
+    throw new Error('TMDB_API_KEY not configured');
+  }
   const url = new URL(`${TMDB_BASE}${path}`);
   url.searchParams.set('api_key', key);
   Object.entries(params).forEach(([k, v]) => { if (v != null) url.searchParams.set(k, String(v)); });
+  console.log(`[TMDB] Fetching: ${path}`, Object.keys(params).length ? params : '');
   const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`TMDB API error: ${res.status}`);
-  return res.json();
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error(`[TMDB] API error ${res.status} for ${path}: ${body}`);
+    throw new Error(`TMDB API error: ${res.status}`);
+  }
+  const data = await res.json();
+  console.log(`[TMDB] OK: ${path} — ${data.results?.length ?? 'N/A'} results`);
+  return data;
 }
 
 // ── CASCADE SCORING ENGINE ──────────────────────────────────
