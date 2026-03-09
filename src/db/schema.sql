@@ -632,17 +632,23 @@ CREATE TABLE IF NOT EXISTS builder_intel (
 );
 
 -- ============================================================
--- RELEASES CACHE
+-- RELEASE DIGEST
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS releases_cache (
+CREATE TABLE IF NOT EXISTS release_digest (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   week_start DATE NOT NULL,
-  data JSONB NOT NULL DEFAULT '{}',
+  items_json JSONB NOT NULL DEFAULT '{}',
+  personalization_json JSONB NOT NULL DEFAULT '{}',
+  generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, week_start)
 );
+
+CREATE INDEX IF NOT EXISTS idx_release_digest_account ON release_digest(account_id);
+CREATE INDEX IF NOT EXISTS idx_release_digest_week ON release_digest(account_id, week_start DESC);
 
 -- ============================================================
 -- ROW LEVEL SECURITY (Multi-Tenant Isolation)
@@ -679,7 +685,7 @@ ALTER TABLE family_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE book_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE book_ratings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE builder_intel ENABLE ROW LEVEL SECURITY;
-ALTER TABLE releases_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE release_digest ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies: service role bypasses, authenticated users see only their account
 CREATE POLICY account_isolation ON brand_profiles FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
@@ -712,4 +718,4 @@ CREATE POLICY account_isolation ON family_log FOR ALL USING (account_id = curren
 CREATE POLICY account_isolation ON book_items FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
 CREATE POLICY account_isolation ON book_ratings FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
 CREATE POLICY account_isolation ON builder_intel FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON releases_cache FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+CREATE POLICY account_isolation ON release_digest FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
