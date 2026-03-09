@@ -330,15 +330,21 @@ CREATE TABLE IF NOT EXISTS outreach_sends (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Releases cache
-CREATE TABLE IF NOT EXISTS releases_cache (
+-- Release Digest (weekly cached release data)
+CREATE TABLE IF NOT EXISTS release_digest (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   week_start DATE NOT NULL,
-  data JSONB NOT NULL DEFAULT '{}',
+  items_json JSONB NOT NULL DEFAULT '{}',
+  personalization_json JSONB NOT NULL DEFAULT '{}',
+  generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, week_start)
 );
+
+CREATE INDEX IF NOT EXISTS idx_release_digest_account ON release_digest(account_id);
+CREATE INDEX IF NOT EXISTS idx_release_digest_week ON release_digest(account_id, week_start DESC);
 
 -- ── Seed default account if not exists ───────────────────────
 INSERT INTO accounts (id, name, plan) VALUES

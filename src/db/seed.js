@@ -71,22 +71,22 @@ async function seed() {
   // Seed sample keywords
   const keywords = [
     // ChronoStates
-    { keyword: 'alternate history games', product_assigned: 'chronostates', search_volume: 2400, difficulty: 0.45 },
-    { keyword: 'what if history simulator', product_assigned: 'chronostates', search_volume: 880, difficulty: 0.32 },
-    { keyword: 'counterfactual history game', product_assigned: 'chronostates', search_volume: 590, difficulty: 0.28 },
-    { keyword: 'historical strategy game online', product_assigned: 'chronostates', search_volume: 1900, difficulty: 0.55 },
+    { keyword: 'alternate history games', product_assigned: 'chronostates', search_volume_estimate: 2400, difficulty_estimate: 0.45 },
+    { keyword: 'what if history simulator', product_assigned: 'chronostates', search_volume_estimate: 880, difficulty_estimate: 0.32 },
+    { keyword: 'counterfactual history game', product_assigned: 'chronostates', search_volume_estimate: 590, difficulty_estimate: 0.28 },
+    { keyword: 'historical strategy game online', product_assigned: 'chronostates', search_volume_estimate: 1900, difficulty_estimate: 0.55 },
 
     // Payroll Beacon
-    { keyword: 'multi-state payroll compliance', product_assigned: 'payroll_beacon', search_volume: 1200, difficulty: 0.52 },
-    { keyword: 'payroll tax calculator by state', product_assigned: 'payroll_beacon', search_volume: 6600, difficulty: 0.68 },
-    { keyword: 'payroll compliance software', product_assigned: 'payroll_beacon', search_volume: 1800, difficulty: 0.61 },
-    { keyword: 'state payroll tax rates 2026', product_assigned: 'payroll_beacon', search_volume: 4400, difficulty: 0.42 },
+    { keyword: 'multi-state payroll compliance', product_assigned: 'payroll_beacon', search_volume_estimate: 1200, difficulty_estimate: 0.52 },
+    { keyword: 'payroll tax calculator by state', product_assigned: 'payroll_beacon', search_volume_estimate: 6600, difficulty_estimate: 0.68 },
+    { keyword: 'payroll compliance software', product_assigned: 'payroll_beacon', search_volume_estimate: 1800, difficulty_estimate: 0.61 },
+    { keyword: 'state payroll tax rates 2026', product_assigned: 'payroll_beacon', search_volume_estimate: 4400, difficulty_estimate: 0.42 },
 
     // Budgeting Beacon
-    { keyword: 'personal budget app', product_assigned: 'budgeting_beacon', search_volume: 8100, difficulty: 0.72 },
-    { keyword: 'couples budgeting tool', product_assigned: 'budgeting_beacon', search_volume: 720, difficulty: 0.35 },
-    { keyword: 'budget tracker free', product_assigned: 'budgeting_beacon', search_volume: 14800, difficulty: 0.78 },
-    { keyword: 'how to start budgeting', product_assigned: 'budgeting_beacon', search_volume: 5400, difficulty: 0.48 },
+    { keyword: 'personal budget app', product_assigned: 'budgeting_beacon', search_volume_estimate: 8100, difficulty_estimate: 0.72 },
+    { keyword: 'couples budgeting tool', product_assigned: 'budgeting_beacon', search_volume_estimate: 720, difficulty_estimate: 0.35 },
+    { keyword: 'budget tracker free', product_assigned: 'budgeting_beacon', search_volume_estimate: 14800, difficulty_estimate: 0.78 },
+    { keyword: 'how to start budgeting', product_assigned: 'budgeting_beacon', search_volume_estimate: 5400, difficulty_estimate: 0.48 },
   ];
 
   for (const kw of keywords) {
@@ -94,7 +94,7 @@ async function seed() {
       account_id: accountId,
       ...kw,
       status: 'available',
-    }, { onConflict: 'account_id,keyword' });
+    }, { onConflict: 'account_id,keyword,product_assigned' });
   }
   console.log(`Keywords seeded: ${keywords.length}`);
 
