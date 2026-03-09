@@ -475,6 +475,8 @@ export default function SettingsPage() {
               <div>LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET</div>
               <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: 8 }}>Discord</div>
               <div>DISCORD_BOT_TOKEN</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: 8 }}>Spotify (Personal)</div>
+              <div>SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET</div>
             </div>
           </div>
         </>

@@ -51,6 +51,12 @@ const config = {
     provider: process.env.IMAGE_GEN_PROVIDER || 'openai',
   },
 
+  spotify: {
+    clientId: process.env.SPOTIFY_CLIENT_ID,
+    clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+    redirectUri: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:3000/api/music/callback',
+  },
+
   urls: {
     base: process.env.BASE_URL || 'http://localhost:3000',
     chronostates: process.env.CHRONOSTATES_URL || 'https://chronostates.io',

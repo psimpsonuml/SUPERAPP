@@ -165,6 +165,7 @@ const SOCIAL_PLATFORMS = [
   { id: 'instagram', name: 'Instagram', authType: 'oauth2', envVars: ['FB_PAGE_ACCESS_TOKEN'], requiresBusiness: true },
   { id: 'linkedin', name: 'LinkedIn', authType: 'oauth2', envVars: ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET'] },
   { id: 'discord', name: 'Discord', authType: 'bot_token', envVars: ['DISCORD_BOT_TOKEN'] },
+  { id: 'spotify', name: 'Spotify', authType: 'oauth2', envVars: ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET'], personal: true },
 ];
 
 // GET /api/settings/connected-accounts — list all platform connections with status

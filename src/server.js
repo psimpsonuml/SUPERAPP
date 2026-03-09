@@ -18,6 +18,7 @@ const booksRoutes = require('./dashboard/routes/books');
 const releasesRoutes = require('./dashboard/routes/releases');
 const infrastructureRoutes = require('./dashboard/routes/infrastructure');
 const calendarRoutes = require('./dashboard/routes/calendar');
+const musicRoutes = require('./dashboard/routes/music');
 
 const app = express();
 
@@ -107,6 +108,7 @@ app.use('/api/books', booksRoutes); // Books: discover, rate, author cascade
 app.use('/api/releases', releasesRoutes); // Releases: weekly TMDB digest with personalization
 app.use('/api/infrastructure', infrastructureRoutes); // Infrastructure: status, uptime, alerts
 app.use('/api/calendar', requireSupabase, calendarRoutes); // Content calendar: weekly schedule
+app.use('/api/music', musicRoutes); // Music discovery: Spotify integration + cascade scoring
 
 // API info
 app.get('/api', (_req, res) => {
