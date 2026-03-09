@@ -147,6 +147,7 @@ router.post('/rate', async (req, res) => {
   if (!title) return res.status(400).json({ error: 'title required' });
 
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const accountId = req.accountId;
 
@@ -211,6 +212,8 @@ router.get('/library', async (req, res) => {
   try {
     const { status, sort = 'rated_at', genre } = req.query;
     const accountId = req.accountId;
+
+    if (!isSupabaseConfigured()) return res.json({ library: [], stats: {} });
 
     let query = getSupabase()
       .from('book_ratings')

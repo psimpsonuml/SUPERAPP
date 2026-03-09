@@ -1,4 +1,4 @@
-const { getSupabase } = require('../db/supabase');
+const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
 const config = require('../config');
 const logger = require('./logger');
 
@@ -8,6 +8,7 @@ class ApprovalQueueService {
   }
 
   async getSliderPosition() {
+    if (!isSupabaseConfigured()) return config.approvalSlider.default;
     const supabase = getSupabase();
     const { data } = await supabase
       .from('accounts')
@@ -19,6 +20,7 @@ class ApprovalQueueService {
   }
 
   async isReducedOps() {
+    if (!isSupabaseConfigured()) return false;
     const supabase = getSupabase();
     const { data } = await supabase
       .from('accounts')
@@ -38,6 +40,7 @@ class ApprovalQueueService {
   }
 
   async submit(item) {
+    if (!isSupabaseConfigured()) throw new Error('Database not configured');
     const supabase = getSupabase();
     const sliderPosition = await this.getSliderPosition();
     const autoApprove = this.shouldAutoApprove(item.tier || 2, sliderPosition);
@@ -72,6 +75,7 @@ class ApprovalQueueService {
   }
 
   async approve(itemId, reviewerNotes) {
+    if (!isSupabaseConfigured()) throw new Error('Database not configured');
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('approval_queue')
@@ -90,6 +94,7 @@ class ApprovalQueueService {
   }
 
   async reject(itemId, reviewerNotes) {
+    if (!isSupabaseConfigured()) throw new Error('Database not configured');
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('approval_queue')
@@ -108,6 +113,7 @@ class ApprovalQueueService {
   }
 
   async getPending(filters = {}) {
+    if (!isSupabaseConfigured()) return [];
     const supabase = getSupabase();
     let query = supabase
       .from('approval_queue')
@@ -126,6 +132,7 @@ class ApprovalQueueService {
   }
 
   async getOverdue(escalationWindowMinutes = 120) {
+    if (!isSupabaseConfigured()) return [];
     const supabase = getSupabase();
     const cutoff = new Date();
     cutoff.setMinutes(cutoff.getMinutes() - escalationWindowMinutes);
@@ -141,6 +148,9 @@ class ApprovalQueueService {
   }
 
   async getStats() {
+    if (!isSupabaseConfigured()) {
+      return { pending: 0, approvedToday: 0, autoApprovedToday: 0, sliderPosition: config.approvalSlider.default };
+    }
     const supabase = getSupabase();
     const today = new Date().toISOString().slice(0, 10);
 

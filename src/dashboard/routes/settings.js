@@ -1,19 +1,29 @@
 const express = require('express');
-const { getSupabase } = require('../../db/supabase');
+const { getSupabase, isSupabaseConfigured } = require('../../db/supabase');
 
 const router = express.Router();
+
+async function safeQuery(queryFn) {
+  if (!isSupabaseConfigured()) return { data: null, error: null };
+  try { return await queryFn(getSupabase()); }
+  catch (err) { return { data: null, error: err }; }
+}
 
 // GET /api/settings — get account settings
 router.get('/', async (req, res) => {
   try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('*')
-      .eq('id', req.accountId)
-      .single();
+    const { data, error } = await safeQuery((sb) =>
+      sb.from('accounts').select('*').eq('id', req.accountId).single()
+    );
 
-    if (error) return res.status(404).json({ error: 'Account not found' });
+    if (error || !data) {
+      return res.json({
+        id: req.accountId,
+        slider_position: 50,
+        reduced_ops: false,
+        note: 'Account not found — returning defaults',
+      });
+    }
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -23,16 +33,11 @@ router.get('/', async (req, res) => {
 // GET /api/settings/slider — get current slider position
 router.get('/slider', async (req, res) => {
   try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('slider_position')
-      .eq('id', req.accountId)
-      .single();
+    const { data } = await safeQuery((sb) =>
+      sb.from('accounts').select('slider_position').eq('id', req.accountId).single()
+    );
 
-    if (error) return res.status(404).json({ error: 'Account not found' });
-
-    const pos = data.slider_position;
+    const pos = data?.slider_position ?? 50;
     const label = pos <= 25 ? 'Maximum oversight'
       : pos <= 50 ? 'Cautious'
       : pos <= 75 ? 'Balanced'
@@ -60,7 +65,9 @@ router.patch('/slider', async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error || !data) {
+      return res.status(500).json({ error: error?.message || 'Account not found' });
+    }
 
     const sliderLabel = position <= 25 ? 'Maximum oversight'
       : position <= 50 ? 'Cautious'
@@ -89,7 +96,9 @@ router.patch('/reduced-ops', async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error || !data) {
+      return res.status(500).json({ error: error?.message || 'Account not found' });
+    }
     res.json({ reducedOps: data.reduced_ops });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -99,12 +108,9 @@ router.patch('/reduced-ops', async (req, res) => {
 // GET /api/settings/brand-profiles — get brand voice profiles
 router.get('/brand-profiles', async (req, res) => {
   try {
-    const supabase = getSupabase();
-    const { data } = await supabase
-      .from('brand_profiles')
-      .select('*')
-      .eq('account_id', req.accountId);
-
+    const { data } = await safeQuery((sb) =>
+      sb.from('brand_profiles').select('*').eq('account_id', req.accountId)
+    );
     res.json({ profiles: data || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -142,13 +148,9 @@ router.put('/brand-profiles/:product', async (req, res) => {
 // GET /api/settings/sending-domains — get outreach domain status
 router.get('/sending-domains', async (req, res) => {
   try {
-    const supabase = getSupabase();
-    const { data } = await supabase
-      .from('sending_domains')
-      .select('*')
-      .eq('account_id', req.accountId)
-      .order('created_at', { ascending: true });
-
+    const { data } = await safeQuery((sb) =>
+      sb.from('sending_domains').select('*').eq('account_id', req.accountId).order('created_at', { ascending: true })
+    );
     res.json({ domains: data || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });

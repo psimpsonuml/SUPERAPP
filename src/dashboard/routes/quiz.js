@@ -191,6 +191,7 @@ router.post('/answer', async (req, res) => {
   }
 
   try {
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
     const supabase = getSupabase();
     const accountId = req.accountId;
 

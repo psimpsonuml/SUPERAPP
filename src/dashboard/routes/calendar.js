@@ -1,7 +1,13 @@
 const express = require('express');
-const { getSupabase } = require('../../db/supabase');
+const { getSupabase, isSupabaseConfigured } = require('../../db/supabase');
 
 const router = express.Router();
+
+async function safeQuery(queryFn) {
+  if (!isSupabaseConfigured()) return { data: [], error: null };
+  try { return await queryFn(getSupabase()); }
+  catch (err) { return { data: [], error: err }; }
+}
 
 // GET /api/calendar/week?offset=0 — get calendar entries for a week
 router.get('/week', async (req, res) => {
@@ -19,13 +25,14 @@ router.get('/week', async (req, res) => {
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
 
-    const { data } = await supabase
-      .from('content_calendar')
-      .select('*, community:community_id(name, url, platform, rules_json, classification, rule_friendliness, subscriber_count, overall_score, engagement_count, warmup_complete)')
-      .eq('account_id', req.accountId)
-      .gte('date', monday.toISOString().slice(0, 10))
-      .lte('date', sunday.toISOString().slice(0, 10))
-      .order('date', { ascending: true });
+    const { data } = await safeQuery(sb =>
+      sb.from('content_calendar')
+        .select('*, community:community_id(name, url, platform, rules_json, classification, rule_friendliness, subscriber_count, overall_score, engagement_count, warmup_complete)')
+        .eq('account_id', req.accountId)
+        .gte('date', monday.toISOString().slice(0, 10))
+        .lte('date', sunday.toISOString().slice(0, 10))
+        .order('date', { ascending: true })
+    );
 
     // Group by date
     const byDate = {};
@@ -50,15 +57,16 @@ router.get('/week', async (req, res) => {
 // GET /api/calendar/entry/:id — get single entry with full community details
 router.get('/entry/:id', async (req, res) => {
   try {
-    const supabase = getSupabase();
-    const { data } = await supabase
+    if (!isSupabaseConfigured()) return res.status(404).json({ error: 'Entry not found' });
+
+    const { data, error } = await getSupabase()
       .from('content_calendar')
       .select('*, community:community_id(name, url, platform, description, rules_json, classification, rule_friendliness, subscriber_count, overall_score, engagement_count, warmup_complete)')
       .eq('account_id', req.accountId)
       .eq('id', req.params.id)
       .single();
 
-    if (!data) return res.status(404).json({ error: 'Entry not found' });
+    if (error || !data) return res.status(404).json({ error: 'Entry not found' });
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -68,14 +76,15 @@ router.get('/entry/:id', async (req, res) => {
 // POST /api/calendar/entry/:id/status — update entry status
 router.post('/entry/:id/status', async (req, res) => {
   try {
-    const supabase = getSupabase();
+    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
+
     const { status } = req.body;
     const valid = ['scheduled', 'approved', 'posted', 'skipped', 'failed'];
     if (!valid.includes(status)) {
       return res.status(400).json({ error: `Status must be one of: ${valid.join(', ')}` });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('content_calendar')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('account_id', req.accountId)
@@ -83,7 +92,7 @@ router.post('/entry/:id/status', async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error || !data) return res.status(404).json({ error: 'Entry not found' });
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -93,8 +102,6 @@ router.post('/entry/:id/status', async (req, res) => {
 // GET /api/calendar/stats — calendar summary stats
 router.get('/stats', async (req, res) => {
   try {
-    const supabase = getSupabase();
-
     // This week's entries
     const now = new Date();
     const day = now.getDay();
@@ -104,12 +111,13 @@ router.get('/stats', async (req, res) => {
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
 
-    const { data } = await supabase
-      .from('content_calendar')
-      .select('status, post_type, product, platform')
-      .eq('account_id', req.accountId)
-      .gte('date', monday.toISOString().slice(0, 10))
-      .lte('date', sunday.toISOString().slice(0, 10));
+    const { data } = await safeQuery(sb =>
+      sb.from('content_calendar')
+        .select('status, post_type, product, platform')
+        .eq('account_id', req.accountId)
+        .gte('date', monday.toISOString().slice(0, 10))
+        .lte('date', sunday.toISOString().slice(0, 10))
+    );
 
     const entries = data || [];
     const byStatus = {};
