@@ -1066,4 +1066,62 @@ router.get('/qa-playtest/:date', async (req, res) => {
   }
 });
 
+// ── Content Library ───────────────────────────────────────
+
+// GET /api/reports/content-library — scenario library data
+router.get('/content-library', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days, 10) || 30;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const { data: scenarios, error } = await safeQuery(() =>
+      getSupabase()
+        .from('cs_scenario_library')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .gte('created_at', since.toISOString())
+        .order('created_at', { ascending: false })
+    );
+    if (error) return res.status(500).json({ error: error.message });
+
+    const items = scenarios || [];
+
+    // Weekly stats (last 7 days)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const thisWeek = items.filter(s => new Date(s.created_at) >= weekAgo);
+
+    // Variety check for this week
+    const weekEras = [...new Set(thisWeek.map(s => s.era))];
+    const weekRegions = [...new Set(thisWeek.map(s => s.region))];
+    const weekDiffs = [...new Set(thisWeek.map(s => s.difficulty))];
+    const varietyPassed = weekEras.length === thisWeek.length &&
+      weekRegions.length === thisWeek.length &&
+      (thisWeek.length < 3 || ['easy', 'medium', 'hard'].every(d => weekDiffs.includes(d)));
+
+    res.json({
+      scenarios: items,
+      stats: {
+        total: items.length,
+        thisWeek: thisWeek.length,
+        pendingApproval: items.filter(s => s.approval_status === 'pending').length,
+        injected: items.filter(s => s.injected).length,
+        byEra: ERAS_SIMPLE.reduce((acc, e) => { acc[e] = items.filter(s => s.era === e).length; return acc; }, {}),
+        byDifficulty: { easy: items.filter(s => s.difficulty === 'easy').length, medium: items.filter(s => s.difficulty === 'medium').length, hard: items.filter(s => s.difficulty === 'hard').length },
+      },
+      varietyCheck: {
+        passed: varietyPassed,
+        erasUsed: weekEras,
+        regionsUsed: weekRegions,
+        difficultiesUsed: weekDiffs,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const ERAS_SIMPLE = ['ancient', 'medieval', 'renaissance', 'industrial', 'modern', 'future'];
+
 module.exports = router;

@@ -209,6 +209,8 @@ class Orchestrator {
       productIntelligence: await this.compileProductIntelligenceStats(),
 
       adCreatives: await this.compileAdCreativeStats(),
+
+      contentLibrary: new Date().getDay() === 1 ? await this.compileContentLibraryStats() : null,
     };
 
     // Store report
@@ -492,6 +494,64 @@ class Orchestrator {
     } catch (err) {
       logger.warn(`QA playtest stats compilation failed: ${err.message}`);
       return { results: reportData?.qaResults || [], passRate: null, lastNight: null, weekTrend: [] };
+    }
+  }
+
+  async compileContentLibraryStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return null;
+
+      const supabase = getSupabase();
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+
+      // This week's scenarios
+      const { data: thisWeek } = await supabase
+        .from('cs_scenario_library')
+        .select('title, era, region, difficulty, approval_status, injected, created_at')
+        .eq('account_id', this.accountId)
+        .gte('created_at', weekAgo.toISOString())
+        .order('created_at', { ascending: false });
+
+      const scenarios = thisWeek || [];
+
+      // Total in library
+      const { data: total } = await supabase
+        .from('cs_scenario_library')
+        .select('id', { count: 'exact' })
+        .eq('account_id', this.accountId);
+
+      // Variety check
+      const eras = [...new Set(scenarios.map(s => s.era))];
+      const regions = [...new Set(scenarios.map(s => s.region))];
+      const diffs = [...new Set(scenarios.map(s => s.difficulty))];
+      const varietyPassed = eras.length === scenarios.length &&
+        regions.length === scenarios.length &&
+        (scenarios.length < 3 || ['easy', 'medium', 'hard'].every(d => diffs.includes(d)));
+
+      return {
+        generatedThisWeek: scenarios.length,
+        pendingApproval: scenarios.filter(s => s.approval_status === 'pending').length,
+        injected: scenarios.filter(s => s.injected).length,
+        totalInLibrary: total?.length || 0,
+        scenarios: scenarios.map(s => ({
+          title: s.title,
+          era: s.era,
+          region: s.region,
+          difficulty: s.difficulty,
+          status: s.injected ? 'injected' : s.approval_status,
+        })),
+        varietyCheck: {
+          passed: varietyPassed,
+          erasUsed: eras,
+          regionsUsed: regions,
+          difficultiesUsed: diffs,
+        },
+      };
+    } catch (err) {
+      logger.warn(`Content library stats compilation failed: ${err.message}`);
+      return null;
     }
   }
 

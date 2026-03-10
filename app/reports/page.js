@@ -944,6 +944,49 @@ export default function ReportsPage() {
         </div>
       )}
 
+      {/* ── 12b. Content Library (Monday only) ──────── */}
+      {report.contentLibrary && (
+        <div className="section">
+          <div className="section-header">
+            <h2>Content Library</h2>
+            <span className="badge badge-purple" style={{ fontSize: 10 }}>Monday Report</span>
+          </div>
+          <div className="stats-row">
+            <StatBlock value={report.contentLibrary.generatedThisWeek} label="Generated This Week" />
+            <StatBlock value={report.contentLibrary.pendingApproval} label="Pending Approval" color="var(--yellow)" />
+            <StatBlock value={report.contentLibrary.injected} label="Injected to CS" color="var(--green)" />
+            <StatBlock value={report.contentLibrary.totalInLibrary} label="Total in Library" />
+          </div>
+          {report.contentLibrary.varietyCheck && (
+            <div className="card card-compact" style={{ marginTop: 12 }}>
+              <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>
+                Variety Check: {report.contentLibrary.varietyCheck.passed ? 'PASSED' : 'NEEDS ATTENTION'}
+              </div>
+              <div className="text-xs">
+                Eras: {report.contentLibrary.varietyCheck.erasUsed?.join(', ') || '—'} |
+                Regions: {report.contentLibrary.varietyCheck.regionsUsed?.join(', ') || '—'} |
+                Difficulties: {report.contentLibrary.varietyCheck.difficultiesUsed?.join(', ') || '—'}
+              </div>
+            </div>
+          )}
+          {report.contentLibrary.scenarios?.length > 0 && (
+            <div className="card card-compact" style={{ marginTop: 12 }}>
+              <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                This Week&apos;s Scenarios
+              </div>
+              {report.contentLibrary.scenarios.map((s, i) => (
+                <div key={i} className="info-row" style={{ fontSize: 12 }}>
+                  <span className={`badge ${s.difficulty === 'easy' ? 'badge-green' : s.difficulty === 'medium' ? 'badge-yellow' : 'badge-red'}`} style={{ marginRight: 6, fontSize: 10 }}>{s.difficulty}</span>
+                  <span className="info-label" style={{ flex: 1 }}>{s.title}</span>
+                  <span className="text-xs text-muted">{s.era} / {s.region}</span>
+                  <span className={`badge ${s.status === 'injected' ? 'badge-green' : s.status === 'pending' ? 'badge-yellow' : 'badge-blue'}`} style={{ marginLeft: 8, fontSize: 10 }}>{s.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── 13. Infrastructure Health ─────────────────── */}
       <div className="section">
         <div className="section-header">
