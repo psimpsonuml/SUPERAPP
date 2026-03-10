@@ -235,10 +235,235 @@ router.get('/health', async (req, res) => {
 // ── News Feed ────────────────────────────────────────────────
 
 router.get('/news', async (req, res) => {
-  const { data } = await safeQuery((sb) =>
-    sb.from('news_feed_items').select('*').eq('account_id', req.accountId).order('published_at', { ascending: false }).limit(50)
+  const topic = req.query.topic || 'all';
+  const limit = Math.min(parseInt(req.query.limit) || 80, 200);
+  const saved = req.query.saved === 'true';
+  const sort = req.query.sort || 'chronological';
+
+  let query = getSupabase()
+    .from('news_feed_items')
+    .select('*')
+    .eq('account_id', req.accountId);
+
+  if (topic !== 'all') query = query.eq('topic', topic);
+  if (saved) query = query.eq('saved', true);
+  query = query.order('published_at', { ascending: false }).limit(limit);
+
+  const { data, error } = await safeQuery(() => query);
+  if (error) return res.json({ items: [] });
+
+  // Group into clusters
+  const items = data || [];
+  const clusterIds = [...new Set(items.map(i => i.cluster_id).filter(Boolean))];
+
+  let clusters = [];
+  if (clusterIds.length > 0) {
+    const { data: clusterData } = await safeQuery(() =>
+      getSupabase()
+        .from('news_clusters')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .in('id', clusterIds)
+    );
+    clusters = clusterData || [];
+  }
+
+  // Build cluster map
+  const clusterMap = {};
+  for (const c of clusters) {
+    clusterMap[c.id] = { ...c, items: [] };
+  }
+  const standalone = [];
+  for (const item of items) {
+    if (item.cluster_id && clusterMap[item.cluster_id]) {
+      clusterMap[item.cluster_id].items.push(item);
+    } else {
+      standalone.push(item);
+    }
+  }
+
+  // Merge: clusters as grouped entries + standalone items, sorted by newest
+  const feed = [];
+  for (const c of Object.values(clusterMap)) {
+    if (c.items.length > 0) {
+      feed.push({
+        type: 'cluster',
+        id: c.id,
+        cluster_title: c.cluster_title,
+        synthesis: c.synthesis,
+        sentiment: c.sentiment,
+        source_count: c.items.length,
+        topic: c.topic,
+        published_at: c.items[0].published_at,
+        items: c.items,
+      });
+    }
+  }
+  for (const item of standalone) {
+    feed.push({ type: 'item', ...item });
+  }
+
+  // Sort by published_at descending
+  if (sort === 'chronological') {
+    feed.sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
+  }
+
+  res.json({ feed, totalItems: items.length, clusterCount: clusters.length });
+});
+
+// POST /news/save — toggle save/bookmark
+router.post('/news/save', async (req, res) => {
+  const { itemId, saved } = req.body;
+  if (!itemId) return res.status(400).json({ error: 'itemId required' });
+
+  const { error } = await safeQuery(() =>
+    getSupabase()
+      .from('news_feed_items')
+      .update({ saved: saved !== false })
+      .eq('id', itemId)
+      .eq('account_id', req.accountId)
   );
-  res.json({ items: data || [] });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ saved: saved !== false });
+});
+
+// GET /news/briefing — get or generate morning briefing
+router.get('/news/briefing', async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Check for cached briefing
+  const { data: existing } = await safeQuery(() =>
+    getSupabase()
+      .from('news_briefings')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .gte('generated_at', `${today}T00:00:00Z`)
+      .order('generated_at', { ascending: false })
+      .limit(1)
+  );
+
+  if (existing?.[0] && req.query.refresh !== 'true') {
+    return res.json({ briefing: existing[0] });
+  }
+
+  // Generate fresh briefing from today's top items
+  const { data: topItems } = await safeQuery(() =>
+    getSupabase()
+      .from('news_feed_items')
+      .select('headline, summary, topic, source, source_lean')
+      .eq('account_id', req.accountId)
+      .gte('published_at', `${today}T00:00:00Z`)
+      .order('published_at', { ascending: false })
+      .limit(30)
+  );
+
+  const items = topItems || [];
+  if (items.length === 0) {
+    return res.json({ briefing: null, message: 'No stories available for briefing yet' });
+  }
+
+  try {
+    const config = require('../../config');
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: config.llm.anthropic.apiKey });
+
+    // Pick top 5-8 across diverse topics
+    const topicBuckets = {};
+    for (const item of items) {
+      if (!topicBuckets[item.topic]) topicBuckets[item.topic] = [];
+      topicBuckets[item.topic].push(item);
+    }
+    const selected = [];
+    const topics = Object.keys(topicBuckets);
+    let round = 0;
+    while (selected.length < 8 && round < 5) {
+      for (const topic of topics) {
+        if (selected.length >= 8) break;
+        if (topicBuckets[topic][round]) selected.push(topicBuckets[topic][round]);
+      }
+      round++;
+    }
+
+    const storyList = selected.map((s, i) =>
+      `${i + 1}. [${s.topic}] "${s.headline}" (${s.source}) — ${s.summary || ''}`
+    ).join('\n');
+
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1000,
+      messages: [{
+        role: 'user',
+        content: `Write a 2-minute morning briefing summarizing these top stories. Be conversational, informative, and cover each topic area briefly. Group related stories. Keep it under 400 words.\n\nStories:\n${storyList}`,
+      }],
+    });
+
+    const briefingText = response.content[0].text;
+    const topicsCovered = [...new Set(selected.map(s => s.topic))];
+
+    // Cache it
+    const { data: saved } = await safeQuery(() =>
+      getSupabase()
+        .from('news_briefings')
+        .insert({
+          account_id: req.accountId,
+          briefing_text: briefingText,
+          story_count: selected.length,
+          topics_covered: topicsCovered,
+        })
+        .select()
+        .single()
+    );
+
+    res.json({ briefing: saved || { briefing_text: briefingText, story_count: selected.length, topics_covered: topicsCovered } });
+  } catch (err) {
+    res.status(500).json({ error: `Briefing generation failed: ${err.message}` });
+  }
+});
+
+// GET /news/preferences — feed preferences
+router.get('/news/preferences', async (req, res) => {
+  const { data } = await safeQuery(() =>
+    getSupabase()
+      .from('news_feed_preferences')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .single()
+  );
+  res.json({ preferences: data || { active_topics: ['all'], disabled_sources: [], sort_mode: 'chronological' } });
+});
+
+// PUT /news/preferences — update feed preferences
+router.put('/news/preferences', async (req, res) => {
+  const { active_topics, disabled_sources, sort_mode } = req.body;
+  const { data, error } = await safeQuery(() =>
+    getSupabase()
+      .from('news_feed_preferences')
+      .upsert({
+        account_id: req.accountId,
+        active_topics: active_topics || ['all'],
+        disabled_sources: disabled_sources || [],
+        sort_mode: sort_mode || 'chronological',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'account_id' })
+      .select()
+      .single()
+  );
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ preferences: data });
+});
+
+// GET /news/top-stories — compact widget for personal dashboard
+router.get('/news/top-stories', async (req, res) => {
+  const { data } = await safeQuery(() =>
+    getSupabase()
+      .from('news_feed_items')
+      .select('id, headline, source, topic, source_lean, published_at, source_url')
+      .eq('account_id', req.accountId)
+      .order('published_at', { ascending: false })
+      .limit(5)
+  );
+  res.json({ stories: data || [] });
 });
 
 // ── Release Tracker ──────────────────────────────────────────
