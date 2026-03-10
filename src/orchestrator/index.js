@@ -174,12 +174,7 @@ class Orchestrator {
         topSignals: reportData.painPoints.slice(0, 5),
       },
 
-      qa: {
-        results: reportData.qaResults,
-        passRate: reportData.qaResults.length > 0
-          ? reportData.qaResults.filter(r => r.pass_fail === 'pass').length / reportData.qaResults.length
-          : null,
-      },
+      qa: await this.compileQaPlaytestStats(reportData),
 
       agentRuns: {
         total: reportData.agentRuns.length,
@@ -440,6 +435,63 @@ class Orchestrator {
     } catch (err) {
       logger.warn(`Product intelligence stats compilation failed: ${err.message}`);
       return { newToday: 0, byProduct: {}, topRecommendations: [], snoozedExpiringThisWeek: 0, pricingAlerts: 0 };
+    }
+  }
+
+  async compileQaPlaytestStats(reportData) {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { results: reportData?.qaResults || [], passRate: null };
+
+      const supabase = getSupabase();
+
+      // Last night's result
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const { data: lastNight } = await supabase
+        .from('qa_results')
+        .select('*')
+        .eq('account_id', this.accountId)
+        .eq('test_date', yesterday.toISOString().slice(0, 10))
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const ln = lastNight?.[0] || null;
+
+      // 7-day trend
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const { data: weekResults } = await supabase
+        .from('qa_results')
+        .select('test_date, pass_fail, latency_stats, narrative_quality_score, bugs')
+        .eq('account_id', this.accountId)
+        .gte('test_date', weekAgo.toISOString().slice(0, 10))
+        .order('test_date', { ascending: false });
+
+      const week = weekResults || [];
+      const weekPassRate = week.length > 0 ? week.filter(r => r.pass_fail === 'pass').length / week.length : null;
+
+      return {
+        results: reportData?.qaResults || [],
+        passRate: weekPassRate,
+        lastNight: ln ? {
+          passFail: ln.pass_fail,
+          latencyStats: ln.latency_stats,
+          narrativeQuality: ln.narrative_quality_score,
+          bugs: ln.bugs || [],
+          scenarioConfig: ln.scenario_config,
+        } : null,
+        weekTrend: week.map(r => ({
+          date: r.test_date,
+          passFail: r.pass_fail,
+          avgLatency: r.latency_stats?.avg || 0,
+          narrativeQuality: r.narrative_quality_score || 0,
+          bugCount: (r.bugs || []).length,
+        })),
+      };
+    } catch (err) {
+      logger.warn(`QA playtest stats compilation failed: ${err.message}`);
+      return { results: reportData?.qaResults || [], passRate: null, lastNight: null, weekTrend: [] };
     }
   }
 

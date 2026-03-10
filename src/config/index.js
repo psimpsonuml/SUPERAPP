@@ -63,9 +63,14 @@ const config = {
 
   urls: {
     base: process.env.BASE_URL || 'http://localhost:3000',
-    chronostates: process.env.CHRONOSTATES_URL || 'https://chronostates.io',
+    chronostates: process.env.CS_API_BASE_URL || process.env.CHRONOSTATES_URL || 'https://chronostates.io',
     payrollBeacon: process.env.PAYROLL_BEACON_URL || 'https://payrollbeacon.com',
     budgetingBeacon: process.env.BUDGETING_BEACON_URL || 'https://budgetingbeacon.com',
+  },
+
+  chronostates: {
+    apiBaseUrl: process.env.CS_API_BASE_URL || process.env.CHRONOSTATES_URL || 'https://chronostates.io',
+    apiKey: process.env.CS_API_KEY || process.env.CS_TEST_USER_TOKEN || '',
   },
 
   products: ['chronostates', 'payroll_beacon', 'budgeting_beacon'],

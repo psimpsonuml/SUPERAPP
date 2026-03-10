@@ -968,4 +968,102 @@ router.patch('/ad-creatives/:id/used', async (req, res) => {
   }
 });
 
+// ── QA Playtest ───────────────────────────────────────────
+
+// GET /api/reports/qa-playtest — QA test results with stats and trends
+router.get('/qa-playtest', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days, 10) || 30;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const { data, error } = await safeQuery(() =>
+      getSupabase()
+        .from('qa_results')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .gte('test_date', since.toISOString().slice(0, 10))
+        .order('test_date', { ascending: false })
+    );
+    if (error) return res.status(500).json({ error: error.message });
+
+    const results = data || [];
+
+    // Build calendar grid (pass/fail/warning per day)
+    const calendar = {};
+    for (const r of results) {
+      const date = r.test_date;
+      const hasCritical = (r.bugs || []).some(b => ['critical', 'media', 'synthesis', 'localization'].includes(b.severity));
+      const hasWarnings = (r.bugs || []).some(b => ['performance', 'content_flag', 'media_flag'].includes(b.severity));
+      calendar[date] = r.pass_fail === 'pass' && !hasCritical ? (hasWarnings ? 'warning' : 'pass') : 'fail';
+    }
+
+    // Trend data: latency and narrative quality over time
+    const trends = results.map(r => ({
+      date: r.test_date,
+      passFail: r.pass_fail,
+      avgLatency: r.latency_stats?.avg || 0,
+      maxLatency: r.latency_stats?.max || 0,
+      narrativeQuality: r.narrative_quality_score || 0,
+      bugCount: (r.bugs || []).length,
+    })).reverse();
+
+    // Last night's result
+    const lastNight = results[0] || null;
+
+    // 7-day stats
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekResults = results.filter(r => new Date(r.test_date) >= weekAgo);
+    const weekPassRate = weekResults.length > 0
+      ? weekResults.filter(r => r.pass_fail === 'pass').length / weekResults.length
+      : null;
+
+    res.json({
+      results,
+      calendar,
+      trends,
+      lastNight: lastNight ? {
+        date: lastNight.test_date,
+        passFail: lastNight.pass_fail,
+        worldId: lastNight.world_id,
+        scenarioConfig: lastNight.scenario_config,
+        latencyStats: lastNight.latency_stats,
+        narrativeQuality: lastNight.narrative_quality_score,
+        bugs: lastNight.bugs,
+        checks: lastNight.checks,
+      } : null,
+      stats: {
+        totalTests: results.length,
+        passRate: results.length > 0 ? results.filter(r => r.pass_fail === 'pass').length / results.length : null,
+        weekPassRate,
+        avgLatency: results.length > 0 ? Math.round(results.reduce((s, r) => s + (r.latency_stats?.avg || 0), 0) / results.length) : 0,
+        avgNarrativeQuality: results.length > 0 ? +(results.reduce((s, r) => s + (r.narrative_quality_score || 0), 0) / results.length).toFixed(1) : 0,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/reports/qa-playtest/:date — single day's full test report
+router.get('/qa-playtest/:date', async (req, res) => {
+  try {
+    const { data, error } = await safeQuery(() =>
+      getSupabase()
+        .from('qa_results')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .eq('test_date', req.params.date)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+    );
+    if (error) return res.status(404).json({ error: 'No results for this date' });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

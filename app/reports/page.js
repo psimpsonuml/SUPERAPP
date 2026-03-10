@@ -875,18 +875,72 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* ── 12. QA Results ────────────────────────────── */}
+      {/* ── 12. QA Playtest ───────────────────────────── */}
       {report.qa && (
         <div className="section">
-          <div className="section-header"><h2>QA Results</h2></div>
+          <div className="section-header">
+            <h2>QA Playtest</h2>
+            <a href="/qa-playtest" className="btn btn-sm" style={{ textDecoration: 'none', fontSize: 11 }}>View Details</a>
+          </div>
           <div className="stats-row">
             <StatBlock
               value={report.qa.passRate != null ? `${(report.qa.passRate * 100).toFixed(0)}%` : '—'}
-              label="Pass Rate"
+              label="7-Day Pass Rate"
               color={report.qa.passRate >= 0.9 ? 'var(--green)' : report.qa.passRate >= 0.7 ? 'var(--yellow)' : 'var(--red)'}
             />
-            <StatBlock value={report.qa.results?.length ?? 0} label="Tests Run" />
+            <StatBlock
+              value={report.qa.lastNight?.passFail?.toUpperCase() || '—'}
+              label="Last Night"
+              color={report.qa.lastNight?.passFail === 'pass' ? 'var(--green)' : 'var(--red)'}
+            />
+            <StatBlock
+              value={report.qa.lastNight?.latencyStats ? `${Math.round(report.qa.lastNight.latencyStats.avg)}ms` : '—'}
+              label="Avg Latency"
+              sub={report.qa.lastNight?.latencyStats ? `max: ${Math.round(report.qa.lastNight.latencyStats.max)}ms` : ''}
+            />
+            <StatBlock
+              value={report.qa.lastNight?.narrativeQuality ?? '—'}
+              label="Narrative Quality"
+              color={report.qa.lastNight?.narrativeQuality >= 7 ? 'var(--green)' : 'var(--yellow)'}
+              sub="/10"
+            />
           </div>
+          {report.qa.lastNight?.bugs?.length > 0 && (
+            <div className="card card-compact" style={{ marginTop: 12 }}>
+              <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                Bugs Found Last Night
+              </div>
+              {report.qa.lastNight.bugs.map((bug, i) => (
+                <div key={i} className="info-row" style={{ fontSize: 12 }}>
+                  <span className={`badge ${bug.severity === 'critical' ? 'badge-red' : bug.severity === 'performance' ? 'badge-blue' : 'badge-yellow'}`} style={{ marginRight: 8 }}>{bug.severity}</span>
+                  <span className="info-label">{bug.check}</span>
+                  <span className="info-value text-sm">{bug.actual}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {report.qa.weekTrend?.length > 0 && (
+            <div className="card card-compact" style={{ marginTop: 12 }}>
+              <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                7-Day Trend
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {report.qa.weekTrend.map((d, i) => (
+                  <div key={i} style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{
+                      width: 24, height: 24, borderRadius: 4, margin: '0 auto 4px',
+                      background: d.passFail === 'pass' ? '#059669' : '#dc2626',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: 10, fontWeight: 600,
+                    }}>
+                      {d.passFail === 'pass' ? '✓' : '✗'}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{d.date?.slice(5)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
