@@ -212,6 +212,8 @@ class Orchestrator {
       videoProduction: await this.compileVideoProductionStats(),
 
       productIntelligence: await this.compileProductIntelligenceStats(),
+
+      adCreatives: await this.compileAdCreativeStats(),
     };
 
     // Store report
@@ -438,6 +440,47 @@ class Orchestrator {
     } catch (err) {
       logger.warn(`Product intelligence stats compilation failed: ${err.message}`);
       return { newToday: 0, byProduct: {}, topRecommendations: [], snoozedExpiringThisWeek: 0, pricingAlerts: 0 };
+    }
+  }
+
+  async compileAdCreativeStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { thisWeek: 0, byProduct: {}, byPlatform: {}, pendingApproval: 0, complianceFlags: 0 };
+
+      const supabase = getSupabase();
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+
+      const { data } = await supabase
+        .from('approval_queue')
+        .select('status, full_content, created_at')
+        .eq('account_id', this.accountId)
+        .eq('item_type', 'ad_creative')
+        .gte('created_at', weekAgo.toISOString());
+
+      const items = data || [];
+      const byProduct = {};
+      const byPlatform = {};
+      let complianceFlags = 0;
+
+      for (const item of items) {
+        const content = typeof item.full_content === 'object' ? item.full_content : {};
+        if (content.product) byProduct[content.product] = (byProduct[content.product] || 0) + 1;
+        if (content.platform) byPlatform[content.platform] = (byPlatform[content.platform] || 0) + 1;
+        if (content.compliance && !content.compliance.pass) complianceFlags++;
+      }
+
+      return {
+        thisWeek: items.length,
+        byProduct,
+        byPlatform,
+        pendingApproval: items.filter(i => i.status === 'pending').length,
+        complianceFlags,
+      };
+    } catch (err) {
+      logger.warn(`Ad creative stats compilation failed: ${err.message}`);
+      return { thisWeek: 0, byProduct: {}, byPlatform: {}, pendingApproval: 0, complianceFlags: 0 };
     }
   }
 

@@ -6,7 +6,7 @@ import {
   fetchAgents, fetchHealthReport, fetchContentPerformance,
   fetchProductIntelligence, fetchApprovalStats, fetchInfraStatus,
   fetchCommunityReport, fetchBuilderIntel, fetchSeoPostsToday,
-  fetchOutreachReport, fetchSocialReport,
+  fetchOutreachReport, fetchSocialReport, fetchAdCreatives,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -39,6 +39,7 @@ export default function ReportsPage() {
   const [seoPosts, setSeoPosts] = useState(null);
   const [outreachReport, setOutreachReport] = useState(null);
   const [socialReport, setSocialReport] = useState(null);
+  const [adCreativeStats, setAdCreativeStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -59,6 +60,7 @@ export default function ReportsPage() {
         fetchSeoPostsToday(),
         fetchOutreachReport(),
         fetchSocialReport(),
+        fetchAdCreatives({ days: 7 }),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -78,10 +80,11 @@ export default function ReportsPage() {
       setSeoPosts(val(12));
       setOutreachReport(val(13));
       setSocialReport(val(14));
+      setAdCreativeStats(val(15)?.stats || null);
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[15 + i];
+        const r = results[16 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -999,6 +1002,49 @@ export default function ReportsPage() {
             </div>
           </div>
         </div>
+      </div>
+      {/* ── Ad Creatives ─────────────────────────── */}
+      <div className="section">
+        <div className="section-header"><h2>Ad Creatives</h2></div>
+        <div className="stat-row">
+          <StatBlock label="This Week" value={report.adCreatives?.thisWeek ?? adCreativeStats?.total ?? 0} />
+          <StatBlock label="Pending Approval" value={report.adCreatives?.pendingApproval ?? adCreativeStats?.byStatus?.pending ?? 0} color="#d97706" />
+          <StatBlock label="Compliance Flags" value={report.adCreatives?.complianceFlags ?? adCreativeStats?.complianceFlags ?? 0} color={report.adCreatives?.complianceFlags > 0 || (adCreativeStats?.complianceFlags || 0) > 0 ? '#dc2626' : undefined} />
+        </div>
+        {(() => {
+          const byProduct = report.adCreatives?.byProduct || adCreativeStats?.byProduct || {};
+          const byPlatform = report.adCreatives?.byPlatform || adCreativeStats?.byPlatform || {};
+          return (Object.keys(byProduct).length > 0 || Object.keys(byPlatform).length > 0) ? (
+            <div className="grid-2" style={{ marginTop: 12 }}>
+              {Object.keys(byProduct).length > 0 && (
+                <div className="card card-compact">
+                  <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+                    By Product
+                  </div>
+                  {Object.entries(byProduct).map(([p, count]) => (
+                    <div key={p} className="info-row">
+                      <span className="info-label">{p}</span>
+                      <span className="info-value">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {Object.keys(byPlatform).length > 0 && (
+                <div className="card card-compact">
+                  <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+                    By Platform
+                  </div>
+                  {Object.entries(byPlatform).map(([p, count]) => (
+                    <div key={p} className="info-row">
+                      <span className="info-label">{p}</span>
+                      <span className="info-value">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null;
+        })()}
       </div>
     </>
   );

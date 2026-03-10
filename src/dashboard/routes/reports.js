@@ -870,4 +870,102 @@ router.patch('/intelligence/:id/status', async (req, res) => {
   }
 });
 
+// ── Ad Creatives ──────────────────────────────────────────
+
+// GET /api/reports/ad-creatives — list ad creatives from approval queue + content memory
+router.get('/ad-creatives', async (req, res) => {
+  try {
+    const { product, platform, status, days } = req.query;
+    const limit = parseInt(req.query.limit, 10) || 100;
+
+    let query = getSupabase()
+      .from('approval_queue')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .eq('item_type', 'ad_creative')
+      .order('created_at', { ascending: false });
+
+    if (status) query = query.eq('status', status);
+    if (days) {
+      const since = new Date();
+      since.setDate(since.getDate() - parseInt(days, 10));
+      query = query.gte('created_at', since.toISOString());
+    }
+
+    const { data, error } = await safeQuery(() => query.limit(limit));
+    if (error) return res.status(500).json({ error: error.message });
+
+    let creatives = (data || []).map(item => ({
+      id: item.id,
+      status: item.status,
+      created_at: item.created_at,
+      preview: item.content_preview,
+      ...(typeof item.full_content === 'object' ? item.full_content : {}),
+    }));
+
+    // Apply product/platform filters on the JSONB content
+    if (product) creatives = creatives.filter(c => c.product === product);
+    if (platform) creatives = creatives.filter(c => c.platform === platform);
+
+    // Stats
+    const allCreatives = (data || []).map(item => ({
+      status: item.status,
+      ...(typeof item.full_content === 'object' ? item.full_content : {}),
+    }));
+
+    const stats = {
+      total: allCreatives.length,
+      byStatus: {},
+      byProduct: {},
+      byPlatform: {},
+      complianceFlags: allCreatives.filter(c => c.compliance && !c.compliance.pass).length,
+    };
+
+    for (const c of allCreatives) {
+      stats.byStatus[c.status] = (stats.byStatus[c.status] || 0) + 1;
+      if (c.product) stats.byProduct[c.product] = (stats.byProduct[c.product] || 0) + 1;
+      if (c.platform) stats.byPlatform[c.platform] = (stats.byPlatform[c.platform] || 0) + 1;
+    }
+
+    res.json({ creatives, stats });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/reports/ad-creatives/:id/used — mark creative as actually placed
+router.patch('/ad-creatives/:id/used', async (req, res) => {
+  try {
+    const { data: existing } = await safeQuery(() =>
+      getSupabase()
+        .from('approval_queue')
+        .select('full_content')
+        .eq('id', req.params.id)
+        .eq('account_id', req.accountId)
+        .single()
+    );
+
+    if (!existing) return res.status(404).json({ error: 'Creative not found' });
+
+    const content = typeof existing.full_content === 'object' ? existing.full_content : {};
+    content.used = true;
+    content.used_at = new Date().toISOString();
+    if (req.body.performanceUrl) content.performanceUrl = req.body.performanceUrl;
+
+    const { data, error } = await safeQuery(() =>
+      getSupabase()
+        .from('approval_queue')
+        .update({ full_content: content })
+        .eq('id', req.params.id)
+        .eq('account_id', req.accountId)
+        .select('id')
+        .single()
+    );
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ id: data.id, used: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
