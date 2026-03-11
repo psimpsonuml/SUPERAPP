@@ -40,6 +40,10 @@ const designRoutes = require('./dashboard/routes/design');
 const podcastProducerRoutes = require('./dashboard/routes/podcast-producer');
 const beaconbotRoutes = require('./dashboard/routes/beaconbot');
 const bookPublishingRoutes = require('./dashboard/routes/book-publishing');
+const featureVisibilityRoutes = require('./dashboard/routes/feature-visibility');
+const legalRoutes = require('./dashboard/routes/legal');
+const companionRoutes = require('./dashboard/routes/companion');
+const faqRoutes = require('./dashboard/routes/faq');
 
 const app = express();
 
@@ -151,6 +155,10 @@ app.use('/api/design', requireSupabase, designRoutes); // Design Studio: asset g
 app.use('/api/podcast-producer', requireSupabase, podcastProducerRoutes); // Podcast Producer: AI episodes
 app.use('/api/beaconbot', requireSupabase, beaconbotRoutes); // BeaconBot: AI chatbot
 app.use('/api/book-publishing', requireSupabase, bookPublishingRoutes); // Book Publishing: manuscripts, queries, sales
+app.use('/api/features', requireSupabase, featureVisibilityRoutes); // Feature Visibility: control feature access per plan
+app.use('/api/legal', requireSupabase, legalRoutes); // Legal: privacy policy, terms of service
+app.use('/api/companion', requireSupabase, companionRoutes); // Personal Companion: AI coach/buddy/mentor
+app.use('/api/faq', faqRoutes); // FAQ: auto-generated feature documentation
 
 // API info
 app.get('/api', (_req, res) => {

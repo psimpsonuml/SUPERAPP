@@ -43,6 +43,11 @@ const REQUIRED_TABLES = [
   { table: 'release_digest', checkCol: 'items_json' },
   { table: 'social_connections', checkCol: 'platform' },
   { table: 'social_post_log', checkCol: 'platform_post_url' },
+  { table: 'feature_visibility', checkCol: 'feature_id' },
+  { table: 'legal_documents', checkCol: 'document_type' },
+  { table: 'companion_settings', checkCol: 'mode' },
+  { table: 'companion_conversations', checkCol: 'messages_json' },
+  { table: 'companion_checkins', checkCol: 'checkin_message' },
 ];
 
 async function checkTable(supabase, table, checkCol) {
