@@ -15,6 +15,41 @@ const FEEDS = [
   { id: 'now_playing', label: 'Now Playing' },
 ];
 
+const DECADES = [
+  { id: '2020', label: '2020s' },
+  { id: '2010', label: '2010s' },
+  { id: '2000', label: '2000s' },
+  { id: '1990', label: '1990s' },
+  { id: '1980', label: '1980s' },
+  { id: '1970', label: '1970s' },
+  { id: '1960', label: '1960s' },
+  { id: '1950', label: '1950s' },
+  { id: '1940', label: '1940s' },
+];
+
+const LANGUAGES = [
+  { id: 'en', label: 'English' },
+  { id: 'es', label: 'Spanish' },
+  { id: 'fr', label: 'French' },
+  { id: 'de', label: 'German' },
+  { id: 'it', label: 'Italian' },
+  { id: 'pt', label: 'Portuguese' },
+  { id: 'ja', label: 'Japanese' },
+  { id: 'ko', label: 'Korean' },
+  { id: 'zh', label: 'Chinese' },
+  { id: 'hi', label: 'Hindi' },
+  { id: 'ta', label: 'Tamil' },
+  { id: 'te', label: 'Telugu' },
+  { id: 'th', label: 'Thai' },
+  { id: 'ru', label: 'Russian' },
+  { id: 'ar', label: 'Arabic' },
+  { id: 'tr', label: 'Turkish' },
+  { id: 'pl', label: 'Polish' },
+  { id: 'sv', label: 'Swedish' },
+  { id: 'da', label: 'Danish' },
+  { id: 'no', label: 'Norwegian' },
+];
+
 function scoreColor(s) {
   if (s >= 8) return 'var(--green)';
   if (s >= 5) return 'var(--accent)';
@@ -141,6 +176,9 @@ export default function EntertainmentPage() {
   const [feed, setFeed] = useState('popular');
   const [genreFilter, setGenreFilter] = useState('');
   const [genres, setGenres] = useState([]);
+  const [decadeFilter, setDecadeFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
+  const [languageFilter, setLanguageFilter] = useState('');
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -178,6 +216,9 @@ export default function EntertainmentPage() {
     try {
       const params = { feed, page, media_type: mediaType };
       if (genreFilter) params.genre = genreFilter;
+      if (yearFilter) params.year = yearFilter;
+      if (decadeFilter && !yearFilter) params.decade = decadeFilter;
+      if (languageFilter) params.language = languageFilter;
       const result = await tmdbDiscover(params);
       const items = (result.results || []).filter(item => !ratedIds.has(item.id));
       if (append) {
@@ -193,11 +234,11 @@ export default function EntertainmentPage() {
     } finally {
       setFeedLoading(false);
     }
-  }, [feed, mediaType, genreFilter, ratedIds]);
+  }, [feed, mediaType, genreFilter, decadeFilter, yearFilter, languageFilter, ratedIds]);
 
   useEffect(() => {
     if (tab === 'browse' && !searchMode) loadFeed(1, false);
-  }, [tab, feed, mediaType, genreFilter, searchMode, loadFeed]);
+  }, [tab, feed, mediaType, genreFilter, decadeFilter, yearFilter, languageFilter, searchMode, loadFeed]);
 
   // Load credits for current item
   const currentItem = searchMode ? searchResults[currentIndex] : feedItems[currentIndex];
@@ -324,8 +365,8 @@ export default function EntertainmentPage() {
       {/* ═══ BROWSE & RATE ═══ */}
       {tab === 'browse' && (
         <>
-          {/* Controls */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Controls row 1: Media type + Feed + Search */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
               {['movie', 'tv'].map(mt => (
                 <button
@@ -358,26 +399,71 @@ export default function EntertainmentPage() {
                 {FEEDS.map(f => (
                   <button
                     key={f.id}
-                    className={`btn btn-sm${feed === f.id && !genreFilter ? ' btn-primary' : ''}`}
-                    onClick={() => { setFeed(f.id); setGenreFilter(''); }}
+                    className={`btn btn-sm${feed === f.id && !genreFilter && !decadeFilter && !yearFilter && !languageFilter ? ' btn-primary' : ''}`}
+                    onClick={() => { setFeed(f.id); setGenreFilter(''); setDecadeFilter(''); setYearFilter(''); setLanguageFilter(''); }}
                   >
                     {f.label}
                   </button>
                 ))}
-                <select
-                  value={genreFilter}
-                  onChange={e => { setGenreFilter(e.target.value); if (e.target.value) setFeed('popular'); }}
-                  style={{ padding: '5px 10px', fontSize: 12, minWidth: 100 }}
-                >
-                  <option value="">All Genres</option>
-                  {genres.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                </select>
               </>
             )}
 
             <div style={{ flex: 1 }} />
             <span className="text-xs text-muted font-mono">{ratedIds.size} rated</span>
           </div>
+
+          {/* Controls row 2: Filter bars — Genre, Decade, Year, Language */}
+          {!searchMode && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+              <select
+                value={genreFilter}
+                onChange={e => setGenreFilter(e.target.value)}
+                style={{ padding: '5px 10px', fontSize: 12, minWidth: 120 }}
+              >
+                <option value="">All Genres</option>
+                {genres.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+
+              <select
+                value={decadeFilter}
+                onChange={e => { setDecadeFilter(e.target.value); if (e.target.value) setYearFilter(''); }}
+                style={{ padding: '5px 10px', fontSize: 12, minWidth: 110 }}
+              >
+                <option value="">All Decades</option>
+                {DECADES.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+              </select>
+
+              <select
+                value={yearFilter}
+                onChange={e => { setYearFilter(e.target.value); if (e.target.value) setDecadeFilter(''); }}
+                style={{ padding: '5px 10px', fontSize: 12, minWidth: 100 }}
+              >
+                <option value="">All Years</option>
+                {Array.from({ length: 80 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+
+              <select
+                value={languageFilter}
+                onChange={e => setLanguageFilter(e.target.value)}
+                style={{ padding: '5px 10px', fontSize: 12, minWidth: 120 }}
+              >
+                <option value="">All Languages</option>
+                {LANGUAGES.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+              </select>
+
+              {(genreFilter || decadeFilter || yearFilter || languageFilter) && (
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => { setGenreFilter(''); setDecadeFilter(''); setYearFilter(''); setLanguageFilter(''); }}
+                  style={{ fontSize: 11 }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Search bar */}
           {searchMode && (
