@@ -640,11 +640,11 @@ Write conversationally, like a supportive coach. Use specific numbers from their
 // GET /health/dna-crossref — cross-reference health with DNA data if available
 router.get('/health/dna-crossref', async (req, res) => {
   try {
-    // Check if DNA data exists
+    // Check if DNA data exists (cross-reference with dna_personal table)
     const { data: dnaData } = await safeQuery(sb =>
-      sb.from('dna_analysis').select('analysis_type, results')
+      sb.from('dna_personal').select('snp_id, genotype, source_service')
         .eq('account_id', req.accountId)
-        .limit(5)
+        .limit(50)
     );
 
     if (!dnaData?.length) {
@@ -666,7 +666,7 @@ router.get('/health/dna-crossref', async (req, res) => {
 
     res.json({
       available: true,
-      dnaTraits: dnaData.map(d => d.analysis_type),
+      dnaSnps: dnaData.length,
       healthMetrics: [...new Set(metrics.map(m => m.metric_type))],
       insights: [],
     });
