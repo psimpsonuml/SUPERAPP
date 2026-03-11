@@ -172,8 +172,13 @@ export default function AgentsPage() {
                   : status === 'skipped' ? 'badge-muted'
                   : 'badge-muted';
 
+                const cardStatusClass = status === 'running' ? ' agent-card-running'
+                  : status === 'completed' ? ' agent-card-active'
+                  : status === 'failed' ? ' agent-card-error'
+                  : ' agent-card-idle';
+
                 return (
-                  <div key={agentMeta.id} className="agent-card">
+                  <div key={agentMeta.id} className={`agent-card${cardStatusClass}`}>
                     <div className="agent-card-header">
                       <div>
                         <div className="agent-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

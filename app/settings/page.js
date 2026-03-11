@@ -243,10 +243,10 @@ export default function SettingsPage() {
                 onChange={(e) => setSliderPos(Number(e.target.value))}
               />
               <div className="slider-labels">
-                <span>Manual</span>
-                <span>Cautious</span>
-                <span>Balanced</span>
-                <span>Autonomous</span>
+                <span className={sliderPos <= 25 ? 'slider-label-active' : ''}>Manual</span>
+                <span className={sliderPos > 25 && sliderPos <= 50 ? 'slider-label-active' : ''}>Cautious</span>
+                <span className={sliderPos > 50 && sliderPos <= 75 ? 'slider-label-active' : ''}>Balanced</span>
+                <span className={sliderPos > 75 ? 'slider-label-active' : ''}>Autonomous</span>
               </div>
             </div>
 
