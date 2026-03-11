@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS news_briefings (
   generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_news_briefings_unique_daily ON news_briefings(account_id, CAST(generated_at AS DATE));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_news_briefings_unique_daily ON news_briefings(account_id, (generated_at AT TIME ZONE 'UTC')::DATE);
 CREATE INDEX IF NOT EXISTS idx_news_briefings_account ON news_briefings(account_id, generated_at DESC);
 
 -- Feed preferences: saved filter/source settings
