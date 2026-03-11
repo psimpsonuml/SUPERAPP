@@ -107,14 +107,25 @@ export default function ReportsPage() {
   const agentRuns = report.agentRuns || {};
   const infraHealth = report.infrastructure || {};
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const summaryParts = [];
+  if (approvalStats?.pending > 0) summaryParts.push(`${approvalStats.pending} item${approvalStats.pending !== 1 ? 's' : ''} awaiting approval`);
+  if (content.total > 0) summaryParts.push(`${content.total} pieces of content produced`);
+  const failedCount = agentRuns.failed ?? agents.filter(a => a.lastRun?.status === 'failed').length;
+  if (failedCount > 0) summaryParts.push(`${failedCount} agent${failedCount !== 1 ? 's' : ''} need attention`);
+
   return (
     <>
       <div className="page-header">
-        <h1>Daily Report</h1>
-        <p>
-          {report.date || new Date().toLocaleDateString()} &mdash; Generated{' '}
+        <div className="briefing-greeting">{greeting}.</div>
+        <div className="briefing-date">
+          {report.date || new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} &mdash; Generated{' '}
           {report.generatedAt ? new Date(report.generatedAt).toLocaleTimeString() : 'now'}
-        </p>
+        </div>
+        {summaryParts.length > 0 && (
+          <div className="briefing-summary">{summaryParts.join(', ')}.</div>
+        )}
       </div>
 
       {/* ── 1. Executive Summary ──────────────────────── */}

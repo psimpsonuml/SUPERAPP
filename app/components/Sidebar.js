@@ -130,7 +130,7 @@ export default function Sidebar() {
         <div className="sidebar-footer-dot" />
         <div>
           <div style={{ fontSize: 12, fontWeight: 600 }}>System Online</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>v2.0.0 &middot; 29 agents</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>v2.0.0 &middot; 29 agents</div>
         </div>
       </div>
     </aside>
