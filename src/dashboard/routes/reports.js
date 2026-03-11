@@ -1124,4 +1124,261 @@ router.get('/content-library', async (req, res) => {
 
 const ERAS_SIMPLE = ['ancient', 'medieval', 'renaissance', 'industrial', 'modern', 'future'];
 
+// ── Growth: Satellite Blogs ──────────────────────────────
+
+// GET /api/reports/satellite-blogs — satellite blog network overview
+router.get('/satellite-blogs', async (req, res) => {
+  try {
+    const { data: blogs } = await safeQuery(sb =>
+      sb.from('satellite_blogs')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .order('created_at', { ascending: false })
+    );
+
+    const allBlogs = blogs || [];
+
+    // Get recent posts across all satellite blogs
+    const { data: recentPosts } = await safeQuery(sb =>
+      sb.from('satellite_posts')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .order('created_at', { ascending: false })
+        .limit(50)
+    );
+
+    const posts = recentPosts || [];
+
+    // Stats per blog
+    const blogStats = allBlogs.map(blog => {
+      const blogPosts = posts.filter(p => p.satellite_blog_id === blog.id);
+      const withLinks = blogPosts.filter(p => p.has_product_link);
+      return {
+        ...blog,
+        recentPostCount: blogPosts.length,
+        linkRate: blogPosts.length > 0 ? Math.round(withLinks.length / blogPosts.length * 100) : 0,
+        anchorDistribution: blogPosts.reduce((acc, p) => {
+          if (p.link_type) acc[p.link_type] = (acc[p.link_type] || 0) + 1;
+          return acc;
+        }, {}),
+      };
+    });
+
+    // Overall stats
+    const totalPosts = allBlogs.reduce((s, b) => s + (b.posts_generated || 0), 0);
+    const totalBacklinks = allBlogs.reduce((s, b) => s + (b.backlinks_created || 0), 0);
+    const linkTypeDistribution = posts.reduce((acc, p) => {
+      if (p.link_type) acc[p.link_type] = (acc[p.link_type] || 0) + 1;
+      return acc;
+    }, {});
+
+    res.json({
+      blogs: blogStats,
+      stats: {
+        totalBlogs: allBlogs.length,
+        activeBlogs: allBlogs.filter(b => b.status === 'active').length,
+        totalPosts,
+        totalBacklinks,
+        linkTypeDistribution,
+        overallLinkRate: totalPosts > 0 ? Math.round(totalBacklinks / totalPosts * 100) : 0,
+      },
+      recentPosts: posts.slice(0, 20).map(p => ({
+        id: p.id,
+        blogId: p.satellite_blog_id,
+        title: p.title,
+        keyword: p.keyword,
+        wordCount: p.word_count,
+        hasProductLink: p.has_product_link,
+        anchorText: p.anchor_text,
+        linkType: p.link_type,
+        status: p.status,
+        createdAt: p.created_at,
+        publishedAt: p.published_at,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/reports/satellite-blogs — create a new satellite blog
+router.post('/satellite-blogs', async (req, res) => {
+  try {
+    const { domain, name, topic, voiceProfile, parentProduct, publishingFrequency } = req.body;
+    if (!domain || !name || !topic || !parentProduct) {
+      return res.status(400).json({ error: 'domain, name, topic, and parentProduct are required' });
+    }
+
+    const { data, error } = await safeQuery(sb =>
+      sb.from('satellite_blogs')
+        .insert({
+          account_id: req.accountId,
+          domain,
+          name,
+          topic,
+          voice_profile: voiceProfile || {},
+          parent_product: parentProduct,
+          publishing_frequency: publishingFrequency || '2-3/week',
+          status: 'setup',
+        })
+        .select()
+        .single()
+    );
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/reports/satellite-blogs/:id — update a satellite blog
+router.patch('/satellite-blogs/:id', async (req, res) => {
+  try {
+    const updates = {};
+    const allowed = ['name', 'topic', 'voice_profile', 'publishing_frequency', 'status'];
+    for (const key of allowed) {
+      const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      if (req.body[camel] !== undefined) updates[key] = req.body[camel];
+      else if (req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+
+    const { data, error } = await safeQuery(sb =>
+      sb.from('satellite_blogs')
+        .update(updates)
+        .eq('id', req.params.id)
+        .eq('account_id', req.accountId)
+        .select()
+        .single()
+    );
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Growth: Vertical Tools ──────────────────────────────
+
+// GET /api/reports/vertical-tools — vertical tool network overview
+router.get('/vertical-tools', async (req, res) => {
+  try {
+    const { data: tools } = await safeQuery(sb =>
+      sb.from('vertical_tools')
+        .select('*')
+        .eq('account_id', req.accountId)
+        .order('created_at', { ascending: false })
+    );
+
+    const allTools = tools || [];
+
+    // Get discount code stats
+    const { data: codes } = await safeQuery(sb =>
+      sb.from('discount_codes')
+        .select('tool_id, status')
+        .eq('account_id', req.accountId)
+    );
+
+    const allCodes = codes || [];
+
+    const toolStats = allTools.map(tool => {
+      const toolCodes = allCodes.filter(c => c.tool_id === tool.id);
+      return {
+        ...tool,
+        totalCodes: toolCodes.length,
+        redeemedCodes: toolCodes.filter(c => c.status === 'redeemed').length,
+        conversionRate: tool.visits > 0 ? +(tool.conversions / tool.visits * 100).toFixed(1) : 0,
+        ctaRate: tool.visits > 0 ? +(tool.cta_clicks / tool.visits * 100).toFixed(1) : 0,
+      };
+    });
+
+    // Overall stats
+    const totalVisits = allTools.reduce((s, t) => s + (t.visits || 0), 0);
+    const totalCtaClicks = allTools.reduce((s, t) => s + (t.cta_clicks || 0), 0);
+    const totalConversions = allTools.reduce((s, t) => s + (t.conversions || 0), 0);
+    const totalDiscountCodes = allTools.reduce((s, t) => s + (t.discount_codes_generated || 0), 0);
+
+    res.json({
+      tools: toolStats,
+      stats: {
+        totalTools: allTools.length,
+        activeTools: allTools.filter(t => t.status === 'active').length,
+        totalVisits,
+        totalCtaClicks,
+        totalConversions,
+        totalDiscountCodes,
+        overallConversionRate: totalVisits > 0 ? +(totalConversions / totalVisits * 100).toFixed(1) : 0,
+        overallCtaRate: totalVisits > 0 ? +(totalCtaClicks / totalVisits * 100).toFixed(1) : 0,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/reports/vertical-tools — create a new vertical tool
+router.post('/vertical-tools', async (req, res) => {
+  try {
+    const { name, domain, parentProduct, toolType, description, targetKeyword } = req.body;
+    if (!name || !domain || !parentProduct || !toolType) {
+      return res.status(400).json({ error: 'name, domain, parentProduct, and toolType are required' });
+    }
+
+    const { data, error } = await safeQuery(sb =>
+      sb.from('vertical_tools')
+        .insert({
+          account_id: req.accountId,
+          name,
+          domain,
+          parent_product: parentProduct,
+          tool_type: toolType,
+          description: description || null,
+          target_keyword: targetKeyword || null,
+          status: 'setup',
+        })
+        .select()
+        .single()
+    );
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/reports/discount-codes — discount code overview
+router.get('/discount-codes', async (req, res) => {
+  try {
+    const { tool_id, status } = req.query;
+    let query = getSupabase()
+      .from('discount_codes')
+      .select('*')
+      .eq('account_id', req.accountId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (tool_id) query = query.eq('tool_id', tool_id);
+    if (status) query = query.eq('status', status);
+
+    const { data, error } = await safeQuery(() => query);
+    if (error) return res.status(500).json({ error: error.message });
+
+    const items = data || [];
+    const byStatus = items.reduce((acc, c) => { acc[c.status] = (acc[c.status] || 0) + 1; return acc; }, {});
+
+    res.json({
+      codes: items,
+      stats: {
+        total: items.length,
+        byStatus,
+        redemptionRate: items.length > 0 ? +(items.filter(c => c.status === 'redeemed').length / items.length * 100).toFixed(1) : 0,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

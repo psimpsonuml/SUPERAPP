@@ -211,6 +211,8 @@ class Orchestrator {
       adCreatives: await this.compileAdCreativeStats(),
 
       contentLibrary: new Date().getDay() === 1 ? await this.compileContentLibraryStats() : null,
+
+      growth: await this.compileGrowthStats(),
     };
 
     // Store report
@@ -552,6 +554,69 @@ class Orchestrator {
     } catch (err) {
       logger.warn(`Content library stats compilation failed: ${err.message}`);
       return null;
+    }
+  }
+
+  async compileGrowthStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { satelliteBlogs: null, verticalTools: null };
+
+      const supabase = getSupabase();
+
+      // Satellite blogs
+      const { data: blogs } = await supabase
+        .from('satellite_blogs')
+        .select('id, name, domain, parent_product, posts_generated, backlinks_created, status')
+        .eq('account_id', this.accountId)
+        .eq('status', 'active');
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const { data: todayPosts } = await supabase
+        .from('satellite_posts')
+        .select('satellite_blog_id, has_product_link, link_type, status')
+        .eq('account_id', this.accountId)
+        .gte('created_at', todayStart.toISOString());
+
+      const satPosts = todayPosts || [];
+      const activeBlogs = blogs || [];
+
+      // Vertical tools
+      const { data: tools } = await supabase
+        .from('vertical_tools')
+        .select('id, name, domain, parent_product, visits, cta_clicks, conversions, discount_codes_generated, status')
+        .eq('account_id', this.accountId)
+        .eq('status', 'active');
+
+      const activeTools = tools || [];
+      const totalVisits = activeTools.reduce((s, t) => s + (t.visits || 0), 0);
+      const totalConversions = activeTools.reduce((s, t) => s + (t.conversions || 0), 0);
+
+      return {
+        satelliteBlogs: {
+          activeCount: activeBlogs.length,
+          todayPosts: satPosts.length,
+          todayBacklinks: satPosts.filter(p => p.has_product_link).length,
+          totalPosts: activeBlogs.reduce((s, b) => s + (b.posts_generated || 0), 0),
+          totalBacklinks: activeBlogs.reduce((s, b) => s + (b.backlinks_created || 0), 0),
+          linkTypeDistribution: satPosts.reduce((acc, p) => {
+            if (p.link_type) acc[p.link_type] = (acc[p.link_type] || 0) + 1;
+            return acc;
+          }, {}),
+        },
+        verticalTools: {
+          activeCount: activeTools.length,
+          totalVisits,
+          totalConversions,
+          conversionRate: totalVisits > 0 ? +(totalConversions / totalVisits * 100).toFixed(1) : 0,
+          totalDiscountCodes: activeTools.reduce((s, t) => s + (t.discount_codes_generated || 0), 0),
+        },
+      };
+    } catch (err) {
+      logger.warn(`Growth stats compilation failed: ${err.message}`);
+      return { satelliteBlogs: null, verticalTools: null };
     }
   }
 

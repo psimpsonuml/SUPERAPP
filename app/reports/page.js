@@ -7,6 +7,7 @@ import {
   fetchProductIntelligence, fetchApprovalStats, fetchInfraStatus,
   fetchCommunityReport, fetchBuilderIntel, fetchSeoPostsToday,
   fetchOutreachReport, fetchSocialReport, fetchAdCreatives,
+  fetchSatelliteBlogs, fetchVerticalTools,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -40,6 +41,8 @@ export default function ReportsPage() {
   const [outreachReport, setOutreachReport] = useState(null);
   const [socialReport, setSocialReport] = useState(null);
   const [adCreativeStats, setAdCreativeStats] = useState(null);
+  const [satelliteBlogData, setSatelliteBlogData] = useState(null);
+  const [verticalToolData, setVerticalToolData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -61,6 +64,8 @@ export default function ReportsPage() {
         fetchOutreachReport(),
         fetchSocialReport(),
         fetchAdCreatives({ days: 7 }),
+        fetchSatelliteBlogs(),
+        fetchVerticalTools(),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -81,10 +86,12 @@ export default function ReportsPage() {
       setOutreachReport(val(13));
       setSocialReport(val(14));
       setAdCreativeStats(val(15)?.stats || null);
+      setSatelliteBlogData(val(16));
+      setVerticalToolData(val(17));
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[16 + i];
+        const r = results[18 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -1100,6 +1107,95 @@ export default function ReportsPage() {
           </div>
         </div>
       </div>
+      {/* ── Growth: Satellite Blogs & Vertical Tools ── */}
+      <div className="section">
+        <div className="section-header"><h2>Growth Engine</h2></div>
+        <div className="grid-2">
+          {/* Satellite Blogs */}
+          <div className="card card-compact">
+            <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+              Satellite Blog Network
+            </div>
+            {(() => {
+              const sat = report.growth?.satelliteBlogs || satelliteBlogData?.stats;
+              if (!sat) return <div className="text-sm text-muted">No satellite blog data</div>;
+              return (
+                <>
+                  <div className="stats-row" style={{ marginBottom: 12 }}>
+                    <StatBlock value={sat.activeCount ?? sat.activeBlogs ?? 0} label="Active Blogs" color="var(--accent)" />
+                    <StatBlock value={sat.todayPosts ?? 0} label="Posts Today" />
+                    <StatBlock value={sat.totalPosts ?? 0} label="Total Posts" />
+                    <StatBlock value={sat.totalBacklinks ?? 0} label="Total Backlinks" color="var(--green)" />
+                  </div>
+                  {sat.linkTypeDistribution && Object.keys(sat.linkTypeDistribution).length > 0 && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {Object.entries(sat.linkTypeDistribution).map(([type, count]) => (
+                        <span key={type} className="badge badge-muted" style={{ fontSize: 10 }}>
+                          {type}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {satelliteBlogData?.blogs?.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      {satelliteBlogData.blogs.map(blog => (
+                        <div key={blog.id} className="info-row">
+                          <span className="info-label" style={{ fontSize: 12 }}>
+                            {blog.name} <span className="text-xs text-muted">({blog.domain})</span>
+                          </span>
+                          <span className="info-value" style={{ fontSize: 12 }}>
+                            {blog.posts_generated || 0} posts / {blog.backlinks_created || 0} links
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
+          {/* Vertical Tools */}
+          <div className="card card-compact">
+            <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+              Vertical Tools
+            </div>
+            {(() => {
+              const vt = report.growth?.verticalTools || verticalToolData?.stats;
+              if (!vt) return <div className="text-sm text-muted">No vertical tool data</div>;
+              return (
+                <>
+                  <div className="stats-row" style={{ marginBottom: 12 }}>
+                    <StatBlock value={vt.activeCount ?? vt.activeTools ?? 0} label="Active Tools" color="var(--accent)" />
+                    <StatBlock value={vt.totalVisits ?? 0} label="Total Visits" />
+                    <StatBlock value={vt.totalConversions ?? 0} label="Conversions" color="var(--green)" />
+                    <StatBlock value={vt.conversionRate != null ? `${vt.conversionRate}%` : (vt.overallConversionRate != null ? `${vt.overallConversionRate}%` : '—')} label="Conv. Rate" />
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Discount Codes Generated</span>
+                    <span className="info-value">{vt.totalDiscountCodes ?? 0}</span>
+                  </div>
+                  {verticalToolData?.tools?.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      {verticalToolData.tools.map(tool => (
+                        <div key={tool.id} className="info-row">
+                          <span className="info-label" style={{ fontSize: 12 }}>
+                            {tool.name} <span className="text-xs text-muted">({tool.tool_type})</span>
+                          </span>
+                          <span className="info-value" style={{ fontSize: 12 }}>
+                            {tool.visits || 0} visits / {tool.conversions || 0} conv.
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
       {/* ── Ad Creatives ─────────────────────────── */}
       <div className="section">
         <div className="section-header"><h2>Ad Creatives</h2></div>
