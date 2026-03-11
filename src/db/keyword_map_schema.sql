@@ -18,11 +18,11 @@ CREATE TABLE IF NOT EXISTS keyword_map (
 
 ALTER TABLE keyword_map ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "keyword_map_account_isolation" ON keyword_map
-  USING (account_id = current_setting('app.account_id', true)::uuid);
+DO $$ BEGIN CREATE POLICY "keyword_map_account_isolation" ON keyword_map
+  USING (account_id = current_setting('app.account_id', true)::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE INDEX idx_keyword_map_product ON keyword_map(account_id, product_assigned, status);
-CREATE INDEX idx_keyword_map_volume ON keyword_map(search_volume_estimate DESC);
+CREATE INDEX IF NOT EXISTS idx_keyword_map_product ON keyword_map(account_id, product_assigned, status);
+CREATE INDEX IF NOT EXISTS idx_keyword_map_volume ON keyword_map(search_volume_estimate DESC);
 
 -- ══════════════════════════════════════════════════════════
 -- Seed 50 keywords per product

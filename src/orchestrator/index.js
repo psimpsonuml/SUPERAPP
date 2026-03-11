@@ -174,12 +174,7 @@ class Orchestrator {
         topSignals: reportData.painPoints.slice(0, 5),
       },
 
-      qa: {
-        results: reportData.qaResults,
-        passRate: reportData.qaResults.length > 0
-          ? reportData.qaResults.filter(r => r.pass_fail === 'pass').length / reportData.qaResults.length
-          : null,
-      },
+      qa: await this.compileQaPlaytestStats(reportData),
 
       agentRuns: {
         total: reportData.agentRuns.length,
@@ -199,6 +194,25 @@ class Orchestrator {
       lifecycle: {
         updates: reportData.lifecycleStats.length,
       },
+
+      social: {
+        postsScheduled: reportData.contentProduced.filter(c => c.content_type === 'social_post' && c.status === 'draft').length,
+        postsPublished: reportData.contentProduced.filter(c => c.content_type === 'social_post' && c.status === 'published').length,
+      },
+
+      newsletter: await this.compileNewsletterStats(),
+
+      intelligence: await this.compileIntelligenceBriefing(),
+
+      videoProduction: await this.compileVideoProductionStats(),
+
+      productIntelligence: await this.compileProductIntelligenceStats(),
+
+      adCreatives: await this.compileAdCreativeStats(),
+
+      contentLibrary: new Date().getDay() === 1 ? await this.compileContentLibraryStats() : null,
+
+      growth: await this.compileGrowthStats(),
     };
 
     // Store report
@@ -209,9 +223,442 @@ class Orchestrator {
       contentProduced: report.content.total,
       agentRuns: report.agentRuns.total,
       pendingApprovals: report.approvalQueue.pending,
+      newsletterStatus: report.newsletter.status,
+      intelligenceFindings: report.intelligence.totalActive,
+      videosProduced: report.videoProduction.todayCount,
+      newRecommendations: report.productIntelligence.newToday,
     });
 
     return report;
+  }
+
+  async compileNewsletterStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { status: 'no_data', today: null };
+
+      const supabase = getSupabase();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const { data: todayEdition } = await supabase
+        .from('newsletter_editions')
+        .select('subject_line, word_count, status, theme_type, publish_method, open_rate, published_at')
+        .eq('account_id', this.accountId)
+        .gte('created_at', todayStart.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      // Yesterday's open rate
+      const yesterdayStart = new Date(todayStart);
+      yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+      const { data: yesterdayEdition } = await supabase
+        .from('newsletter_editions')
+        .select('subject_line, open_rate, subscriber_count')
+        .eq('account_id', this.accountId)
+        .gte('created_at', yesterdayStart.toISOString())
+        .lt('created_at', todayStart.toISOString())
+        .limit(1);
+
+      const today = todayEdition?.[0] || null;
+      const yesterday = yesterdayEdition?.[0] || null;
+
+      return {
+        status: today ? today.status : 'not_generated',
+        today: today ? {
+          subjectLine: today.subject_line,
+          wordCount: today.word_count,
+          themeType: today.theme_type,
+          publishMethod: today.publish_method,
+        } : null,
+        yesterdayOpenRate: yesterday?.open_rate || null,
+        yesterdaySubject: yesterday?.subject_line || null,
+      };
+    } catch (err) {
+      logger.warn(`Newsletter stats compilation failed: ${err.message}`);
+      return { status: 'error', today: null };
+    }
+  }
+
+  async compileIntelligenceBriefing() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { totalActive: 0, topOpportunities: [], byCategory: {} };
+
+      const supabase = getSupabase();
+
+      // Get all active (not completed/passed) intelligence entries
+      const { data: active } = await supabase
+        .from('intelligence_log')
+        .select('*')
+        .eq('account_id', this.accountId)
+        .in('status', ['discovered', 'new', 'contacted', 'in_progress'])
+        .order('date_found', { ascending: false })
+        .limit(200);
+
+      if (!active || active.length === 0) {
+        return { totalActive: 0, topOpportunities: [], byCategory: {} };
+      }
+
+      // ROI-rank top 10
+      const scored = active.map(entry => {
+        const reach = entry.potential_reach || 1;
+        const relevance = entry.relevance_score || 5;
+        const cost = Math.max(entry.estimated_cost || 1, 1);
+        return { ...entry, roiScore: (reach * relevance) / cost };
+      }).sort((a, b) => b.roiScore - a.roiScore);
+
+      const topOpportunities = scored.slice(0, 10).map(e => ({
+        name: e.name,
+        category: e.category,
+        product: e.product,
+        platform: e.platform,
+        relevanceScore: e.relevance_score,
+        potentialReach: e.potential_reach,
+        costEstimate: e.cost_estimate,
+        roiScore: Math.round(e.roiScore * 100) / 100,
+        status: e.status,
+      }));
+
+      // By category counts
+      const byCategory = {};
+      for (const entry of active) {
+        const cat = entry.category || 'unknown';
+        byCategory[cat] = (byCategory[cat] || 0) + 1;
+      }
+
+      return {
+        totalActive: active.length,
+        topOpportunities,
+        byCategory,
+      };
+    } catch (err) {
+      logger.warn(`Intelligence briefing compilation failed: ${err.message}`);
+      return { totalActive: 0, topOpportunities: [], byCategory: {} };
+    }
+  }
+
+  async compileVideoProductionStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { todayCount: 0, byProduct: {}, byFormat: {} };
+
+      const supabase = getSupabase();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const { data: videos } = await supabase
+        .from('video_assets')
+        .select('product, format, status, duration_sec, file_size_bytes')
+        .eq('account_id', this.accountId)
+        .gte('created_at', todayStart.toISOString());
+
+      if (!videos || videos.length === 0) {
+        return { todayCount: 0, byProduct: {}, byFormat: { short: 0, long: 0 } };
+      }
+
+      const byProduct = {};
+      const byFormat = { short: 0, long: 0 };
+      let totalDuration = 0;
+
+      for (const v of videos) {
+        if (!byProduct[v.product]) byProduct[v.product] = { count: 0, pending: 0, approved: 0 };
+        byProduct[v.product].count++;
+        if (v.status === 'pending_approval') byProduct[v.product].pending++;
+        if (v.status === 'approved' || v.status === 'published') byProduct[v.product].approved++;
+
+        byFormat[v.format] = (byFormat[v.format] || 0) + 1;
+        totalDuration += v.duration_sec || 0;
+      }
+
+      return {
+        todayCount: videos.length,
+        totalDurationSec: totalDuration,
+        byProduct,
+        byFormat,
+      };
+    } catch (err) {
+      logger.warn(`Video production stats compilation failed: ${err.message}`);
+      return { todayCount: 0, byProduct: {}, byFormat: {} };
+    }
+  }
+
+  async compileProductIntelligenceStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { newToday: 0, byProduct: {}, topRecommendations: [], snoozedExpiringThisWeek: 0, pricingAlerts: 0 };
+
+      const supabase = getSupabase();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      // Today's new recommendations
+      const { data: todayRecs } = await supabase
+        .from('product_intelligence')
+        .select('product, rec_type, title, impact_estimate')
+        .eq('account_id', this.accountId)
+        .eq('status', 'new')
+        .gte('created_at', todayStart.toISOString());
+
+      const newRecs = todayRecs || [];
+
+      // By product
+      const byProduct = {};
+      for (const r of newRecs) {
+        byProduct[r.product] = (byProduct[r.product] || 0) + 1;
+      }
+
+      // Top 3 highest-impact
+      const impactOrder = { high: 3, medium: 2, low: 1 };
+      const topRecommendations = [...newRecs]
+        .sort((a, b) => (impactOrder[b.impact_estimate] || 0) - (impactOrder[a.impact_estimate] || 0))
+        .slice(0, 3)
+        .map(r => ({ product: r.product, title: r.title, impact: r.impact_estimate }));
+
+      // Snoozed items expiring this week
+      const weekFromNow = new Date();
+      weekFromNow.setDate(weekFromNow.getDate() + 7);
+      const { data: expiring } = await supabase
+        .from('product_intelligence')
+        .select('id')
+        .eq('account_id', this.accountId)
+        .eq('status', 'snoozed')
+        .lte('snoozed_until', weekFromNow.toISOString())
+        .gte('snoozed_until', new Date().toISOString());
+
+      // Pricing alerts
+      const pricingAlerts = newRecs.filter(r => r.rec_type === 'pricing').length;
+
+      return {
+        newToday: newRecs.length,
+        byProduct,
+        topRecommendations,
+        snoozedExpiringThisWeek: expiring?.length || 0,
+        pricingAlerts,
+      };
+    } catch (err) {
+      logger.warn(`Product intelligence stats compilation failed: ${err.message}`);
+      return { newToday: 0, byProduct: {}, topRecommendations: [], snoozedExpiringThisWeek: 0, pricingAlerts: 0 };
+    }
+  }
+
+  async compileQaPlaytestStats(reportData) {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { results: reportData?.qaResults || [], passRate: null };
+
+      const supabase = getSupabase();
+
+      // Last night's result
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const { data: lastNight } = await supabase
+        .from('qa_results')
+        .select('*')
+        .eq('account_id', this.accountId)
+        .eq('test_date', yesterday.toISOString().slice(0, 10))
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const ln = lastNight?.[0] || null;
+
+      // 7-day trend
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const { data: weekResults } = await supabase
+        .from('qa_results')
+        .select('test_date, pass_fail, latency_stats, narrative_quality_score, bugs')
+        .eq('account_id', this.accountId)
+        .gte('test_date', weekAgo.toISOString().slice(0, 10))
+        .order('test_date', { ascending: false });
+
+      const week = weekResults || [];
+      const weekPassRate = week.length > 0 ? week.filter(r => r.pass_fail === 'pass').length / week.length : null;
+
+      return {
+        results: reportData?.qaResults || [],
+        passRate: weekPassRate,
+        lastNight: ln ? {
+          passFail: ln.pass_fail,
+          latencyStats: ln.latency_stats,
+          narrativeQuality: ln.narrative_quality_score,
+          bugs: ln.bugs || [],
+          scenarioConfig: ln.scenario_config,
+        } : null,
+        weekTrend: week.map(r => ({
+          date: r.test_date,
+          passFail: r.pass_fail,
+          avgLatency: r.latency_stats?.avg || 0,
+          narrativeQuality: r.narrative_quality_score || 0,
+          bugCount: (r.bugs || []).length,
+        })),
+      };
+    } catch (err) {
+      logger.warn(`QA playtest stats compilation failed: ${err.message}`);
+      return { results: reportData?.qaResults || [], passRate: null, lastNight: null, weekTrend: [] };
+    }
+  }
+
+  async compileContentLibraryStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return null;
+
+      const supabase = getSupabase();
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+
+      // This week's scenarios
+      const { data: thisWeek } = await supabase
+        .from('cs_scenario_library')
+        .select('title, era, region, difficulty, approval_status, injected, created_at')
+        .eq('account_id', this.accountId)
+        .gte('created_at', weekAgo.toISOString())
+        .order('created_at', { ascending: false });
+
+      const scenarios = thisWeek || [];
+
+      // Total in library
+      const { data: total } = await supabase
+        .from('cs_scenario_library')
+        .select('id', { count: 'exact' })
+        .eq('account_id', this.accountId);
+
+      // Variety check
+      const eras = [...new Set(scenarios.map(s => s.era))];
+      const regions = [...new Set(scenarios.map(s => s.region))];
+      const diffs = [...new Set(scenarios.map(s => s.difficulty))];
+      const varietyPassed = eras.length === scenarios.length &&
+        regions.length === scenarios.length &&
+        (scenarios.length < 3 || ['easy', 'medium', 'hard'].every(d => diffs.includes(d)));
+
+      return {
+        generatedThisWeek: scenarios.length,
+        pendingApproval: scenarios.filter(s => s.approval_status === 'pending').length,
+        injected: scenarios.filter(s => s.injected).length,
+        totalInLibrary: total?.length || 0,
+        scenarios: scenarios.map(s => ({
+          title: s.title,
+          era: s.era,
+          region: s.region,
+          difficulty: s.difficulty,
+          status: s.injected ? 'injected' : s.approval_status,
+        })),
+        varietyCheck: {
+          passed: varietyPassed,
+          erasUsed: eras,
+          regionsUsed: regions,
+          difficultiesUsed: diffs,
+        },
+      };
+    } catch (err) {
+      logger.warn(`Content library stats compilation failed: ${err.message}`);
+      return null;
+    }
+  }
+
+  async compileGrowthStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { satelliteBlogs: null, verticalTools: null };
+
+      const supabase = getSupabase();
+
+      // Satellite blogs
+      const { data: blogs } = await supabase
+        .from('satellite_blogs')
+        .select('id, name, domain, parent_product, posts_generated, backlinks_created, status')
+        .eq('account_id', this.accountId)
+        .eq('status', 'active');
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const { data: todayPosts } = await supabase
+        .from('satellite_posts')
+        .select('satellite_blog_id, has_product_link, link_type, status')
+        .eq('account_id', this.accountId)
+        .gte('created_at', todayStart.toISOString());
+
+      const satPosts = todayPosts || [];
+      const activeBlogs = blogs || [];
+
+      // Vertical tools
+      const { data: tools } = await supabase
+        .from('vertical_tools')
+        .select('id, name, domain, parent_product, visits, cta_clicks, conversions, discount_codes_generated, status')
+        .eq('account_id', this.accountId)
+        .eq('status', 'active');
+
+      const activeTools = tools || [];
+      const totalVisits = activeTools.reduce((s, t) => s + (t.visits || 0), 0);
+      const totalConversions = activeTools.reduce((s, t) => s + (t.conversions || 0), 0);
+
+      return {
+        satelliteBlogs: {
+          activeCount: activeBlogs.length,
+          todayPosts: satPosts.length,
+          todayBacklinks: satPosts.filter(p => p.has_product_link).length,
+          totalPosts: activeBlogs.reduce((s, b) => s + (b.posts_generated || 0), 0),
+          totalBacklinks: activeBlogs.reduce((s, b) => s + (b.backlinks_created || 0), 0),
+          linkTypeDistribution: satPosts.reduce((acc, p) => {
+            if (p.link_type) acc[p.link_type] = (acc[p.link_type] || 0) + 1;
+            return acc;
+          }, {}),
+        },
+        verticalTools: {
+          activeCount: activeTools.length,
+          totalVisits,
+          totalConversions,
+          conversionRate: totalVisits > 0 ? +(totalConversions / totalVisits * 100).toFixed(1) : 0,
+          totalDiscountCodes: activeTools.reduce((s, t) => s + (t.discount_codes_generated || 0), 0),
+        },
+      };
+    } catch (err) {
+      logger.warn(`Growth stats compilation failed: ${err.message}`);
+      return { satelliteBlogs: null, verticalTools: null };
+    }
+  }
+
+  async compileAdCreativeStats() {
+    try {
+      const { getSupabase, isSupabaseConfigured } = require('../db/supabase');
+      if (!isSupabaseConfigured()) return { thisWeek: 0, byProduct: {}, byPlatform: {}, pendingApproval: 0, complianceFlags: 0 };
+
+      const supabase = getSupabase();
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+
+      const { data } = await supabase
+        .from('approval_queue')
+        .select('status, full_content, created_at')
+        .eq('account_id', this.accountId)
+        .eq('item_type', 'ad_creative')
+        .gte('created_at', weekAgo.toISOString());
+
+      const items = data || [];
+      const byProduct = {};
+      const byPlatform = {};
+      let complianceFlags = 0;
+
+      for (const item of items) {
+        const content = typeof item.full_content === 'object' ? item.full_content : {};
+        if (content.product) byProduct[content.product] = (byProduct[content.product] || 0) + 1;
+        if (content.platform) byPlatform[content.platform] = (byPlatform[content.platform] || 0) + 1;
+        if (content.compliance && !content.compliance.pass) complianceFlags++;
+      }
+
+      return {
+        thisWeek: items.length,
+        byProduct,
+        byPlatform,
+        pendingApproval: items.filter(i => i.status === 'pending').length,
+        complianceFlags,
+      };
+    } catch (err) {
+      logger.warn(`Ad creative stats compilation failed: ${err.message}`);
+      return { thisWeek: 0, byProduct: {}, byPlatform: {}, pendingApproval: 0, complianceFlags: 0 };
+    }
   }
 
   async sendCriticalAlert(agentId, errorMessage) {

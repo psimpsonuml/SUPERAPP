@@ -6,7 +6,8 @@ import {
   fetchAgents, fetchHealthReport, fetchContentPerformance,
   fetchProductIntelligence, fetchApprovalStats, fetchInfraStatus,
   fetchCommunityReport, fetchBuilderIntel, fetchSeoPostsToday,
-  fetchOutreachReport,
+  fetchOutreachReport, fetchSocialReport, fetchAdCreatives,
+  fetchSatelliteBlogs, fetchVerticalTools,
 } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
@@ -38,6 +39,10 @@ export default function ReportsPage() {
   const [builderIntel, setBuilderIntel] = useState(null);
   const [seoPosts, setSeoPosts] = useState(null);
   const [outreachReport, setOutreachReport] = useState(null);
+  const [socialReport, setSocialReport] = useState(null);
+  const [adCreativeStats, setAdCreativeStats] = useState(null);
+  const [satelliteBlogData, setSatelliteBlogData] = useState(null);
+  const [verticalToolData, setVerticalToolData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,6 +62,10 @@ export default function ReportsPage() {
         fetchBuilderIntel(1),
         fetchSeoPostsToday(),
         fetchOutreachReport(),
+        fetchSocialReport(),
+        fetchAdCreatives({ days: 7 }),
+        fetchSatelliteBlogs(),
+        fetchVerticalTools(),
         ...PRODUCTS.map((p) => fetchContentPerformance(p.id, 30)),
       ]);
 
@@ -75,10 +84,14 @@ export default function ReportsPage() {
       setBuilderIntel(val(11));
       setSeoPosts(val(12));
       setOutreachReport(val(13));
+      setSocialReport(val(14));
+      setAdCreativeStats(val(15)?.stats || null);
+      setSatelliteBlogData(val(16));
+      setVerticalToolData(val(17));
 
       const perfMap = {};
       PRODUCTS.forEach((p, i) => {
-        const r = results[14 + i];
+        const r = results[18 + i];
         if (r?.status === 'fulfilled') perfMap[p.id] = r.value;
       });
       setContentPerf(perfMap);
@@ -402,6 +415,102 @@ export default function ReportsPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Social Distributor ──────────────────────── */}
+      <div className="section">
+        <div className="section-header">
+          <h2>Social Distribution</h2>
+          <span className="text-sm text-muted">
+            {socialReport ? `${socialReport.today?.totalScheduled || 0} scheduled · ${socialReport.today?.totalPublished || 0} published · ${socialReport.today?.totalPending || 0} pending` : 'Loading...'}
+          </span>
+        </div>
+        {!socialReport || (socialReport.today?.totalScheduled === 0 && socialReport.today?.totalPublished === 0) ? (
+          <div className="text-sm text-muted" style={{ padding: 20 }}>No social posts scheduled or published today</div>
+        ) : (
+          <>
+            <div className="stats-row">
+              <StatBlock value={socialReport.today?.totalScheduled || 0} label="Scheduled Today" color="var(--accent)" />
+              <StatBlock value={socialReport.today?.totalPublished || 0} label="Published" color="var(--green)" />
+              <StatBlock value={socialReport.today?.totalPending || 0} label="Pending Approval" color="var(--yellow)" />
+              <StatBlock
+                value={
+                  socialReport.yesterdayEngagement
+                    ? `${socialReport.yesterdayEngagement.totalLikes + socialReport.yesterdayEngagement.totalComments + socialReport.yesterdayEngagement.totalShares}`
+                    : '0'
+                }
+                label="Yesterday Engagement"
+              />
+            </div>
+
+            {/* Platform breakdown */}
+            {socialReport.today?.byPlatform && Object.keys(socialReport.today.byPlatform).length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                  By Platform
+                </div>
+                <div className="grid-3" style={{ gap: 8 }}>
+                  {Object.entries(socialReport.today.byPlatform).map(([platform, counts]) => {
+                    const platformLabel = { reddit: 'Reddit', facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn', discord: 'Discord' }[platform] || platform;
+                    return (
+                      <div key={platform} className="info-block">
+                        <div className="font-semibold text-sm">{platformLabel}</div>
+                        <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+                          {counts.scheduled > 0 && <span style={{ marginRight: 8 }}>{counts.scheduled} scheduled</span>}
+                          {counts.published > 0 && <span style={{ color: 'var(--green)', marginRight: 8 }}>{counts.published} published</span>}
+                          {counts.pending > 0 && <span style={{ color: 'var(--yellow)', marginRight: 8 }}>{counts.pending} pending</span>}
+                          {counts.failed > 0 && <span style={{ color: 'var(--red)' }}>{counts.failed} failed</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Yesterday engagement by platform */}
+            {socialReport.yesterdayEngagement && Object.keys(socialReport.yesterdayEngagement.byPlatform || {}).length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                  Yesterday&apos;s Engagement
+                </div>
+                <div className="grid-3" style={{ gap: 8 }}>
+                  {Object.entries(socialReport.yesterdayEngagement.byPlatform).map(([platform, metrics]) => {
+                    const platformLabel = { reddit: 'Reddit', facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn', discord: 'Discord' }[platform] || platform;
+                    return (
+                      <div key={platform} className="info-block">
+                        <div className="font-semibold text-sm">{platformLabel}</div>
+                        <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+                          {metrics.posts} post{metrics.posts !== 1 ? 's' : ''} &middot;
+                          {' '}{metrics.likes} likes &middot; {metrics.comments} comments &middot; {metrics.shares} shares
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Shadowban warnings */}
+            {socialReport.shadowbanWarnings?.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div className="text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8, color: 'var(--red)' }}>
+                  Account Health Warnings
+                </div>
+                {socialReport.shadowbanWarnings.map((warning, i) => (
+                  <div key={i} className="info-block" style={{ borderLeft: '3px solid var(--red)', marginBottom: 8 }}>
+                    <div className="font-semibold text-sm" style={{ color: 'var(--red)' }}>
+                      {(warning.platform || '').charAt(0).toUpperCase() + (warning.platform || '').slice(1)} — Possible Shadowban
+                    </div>
+                    <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+                      {warning.message}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </>
@@ -773,18 +882,115 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* ── 12. QA Results ────────────────────────────── */}
+      {/* ── 12. QA Playtest ───────────────────────────── */}
       {report.qa && (
         <div className="section">
-          <div className="section-header"><h2>QA Results</h2></div>
+          <div className="section-header">
+            <h2>QA Playtest</h2>
+            <a href="/qa-playtest" className="btn btn-sm" style={{ textDecoration: 'none', fontSize: 11 }}>View Details</a>
+          </div>
           <div className="stats-row">
             <StatBlock
               value={report.qa.passRate != null ? `${(report.qa.passRate * 100).toFixed(0)}%` : '—'}
-              label="Pass Rate"
+              label="7-Day Pass Rate"
               color={report.qa.passRate >= 0.9 ? 'var(--green)' : report.qa.passRate >= 0.7 ? 'var(--yellow)' : 'var(--red)'}
             />
-            <StatBlock value={report.qa.results?.length ?? 0} label="Tests Run" />
+            <StatBlock
+              value={report.qa.lastNight?.passFail?.toUpperCase() || '—'}
+              label="Last Night"
+              color={report.qa.lastNight?.passFail === 'pass' ? 'var(--green)' : 'var(--red)'}
+            />
+            <StatBlock
+              value={report.qa.lastNight?.latencyStats ? `${Math.round(report.qa.lastNight.latencyStats.avg)}ms` : '—'}
+              label="Avg Latency"
+              sub={report.qa.lastNight?.latencyStats ? `max: ${Math.round(report.qa.lastNight.latencyStats.max)}ms` : ''}
+            />
+            <StatBlock
+              value={report.qa.lastNight?.narrativeQuality ?? '—'}
+              label="Narrative Quality"
+              color={report.qa.lastNight?.narrativeQuality >= 7 ? 'var(--green)' : 'var(--yellow)'}
+              sub="/10"
+            />
           </div>
+          {report.qa.lastNight?.bugs?.length > 0 && (
+            <div className="card card-compact" style={{ marginTop: 12 }}>
+              <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                Bugs Found Last Night
+              </div>
+              {report.qa.lastNight.bugs.map((bug, i) => (
+                <div key={i} className="info-row" style={{ fontSize: 12 }}>
+                  <span className={`badge ${bug.severity === 'critical' ? 'badge-red' : bug.severity === 'performance' ? 'badge-blue' : 'badge-yellow'}`} style={{ marginRight: 8 }}>{bug.severity}</span>
+                  <span className="info-label">{bug.check}</span>
+                  <span className="info-value text-sm">{bug.actual}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {report.qa.weekTrend?.length > 0 && (
+            <div className="card card-compact" style={{ marginTop: 12 }}>
+              <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                7-Day Trend
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {report.qa.weekTrend.map((d, i) => (
+                  <div key={i} style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{
+                      width: 24, height: 24, borderRadius: 4, margin: '0 auto 4px',
+                      background: d.passFail === 'pass' ? '#059669' : '#dc2626',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: 10, fontWeight: 600,
+                    }}>
+                      {d.passFail === 'pass' ? '✓' : '✗'}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{d.date?.slice(5)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 12b. Content Library (Monday only) ──────── */}
+      {report.contentLibrary && (
+        <div className="section">
+          <div className="section-header">
+            <h2>Content Library</h2>
+            <span className="badge badge-purple" style={{ fontSize: 10 }}>Monday Report</span>
+          </div>
+          <div className="stats-row">
+            <StatBlock value={report.contentLibrary.generatedThisWeek} label="Generated This Week" />
+            <StatBlock value={report.contentLibrary.pendingApproval} label="Pending Approval" color="var(--yellow)" />
+            <StatBlock value={report.contentLibrary.injected} label="Injected to CS" color="var(--green)" />
+            <StatBlock value={report.contentLibrary.totalInLibrary} label="Total in Library" />
+          </div>
+          {report.contentLibrary.varietyCheck && (
+            <div className="card card-compact" style={{ marginTop: 12 }}>
+              <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>
+                Variety Check: {report.contentLibrary.varietyCheck.passed ? 'PASSED' : 'NEEDS ATTENTION'}
+              </div>
+              <div className="text-xs">
+                Eras: {report.contentLibrary.varietyCheck.erasUsed?.join(', ') || '—'} |
+                Regions: {report.contentLibrary.varietyCheck.regionsUsed?.join(', ') || '—'} |
+                Difficulties: {report.contentLibrary.varietyCheck.difficultiesUsed?.join(', ') || '—'}
+              </div>
+            </div>
+          )}
+          {report.contentLibrary.scenarios?.length > 0 && (
+            <div className="card card-compact" style={{ marginTop: 12 }}>
+              <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                This Week&apos;s Scenarios
+              </div>
+              {report.contentLibrary.scenarios.map((s, i) => (
+                <div key={i} className="info-row" style={{ fontSize: 12 }}>
+                  <span className={`badge ${s.difficulty === 'easy' ? 'badge-green' : s.difficulty === 'medium' ? 'badge-yellow' : 'badge-red'}`} style={{ marginRight: 6, fontSize: 10 }}>{s.difficulty}</span>
+                  <span className="info-label" style={{ flex: 1 }}>{s.title}</span>
+                  <span className="text-xs text-muted">{s.era} / {s.region}</span>
+                  <span className={`badge ${s.status === 'injected' ? 'badge-green' : s.status === 'pending' ? 'badge-yellow' : 'badge-blue'}`} style={{ marginLeft: 8, fontSize: 10 }}>{s.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -900,6 +1106,138 @@ export default function ReportsPage() {
             </div>
           </div>
         </div>
+      </div>
+      {/* ── Growth: Satellite Blogs & Vertical Tools ── */}
+      <div className="section">
+        <div className="section-header"><h2>Growth Engine</h2></div>
+        <div className="grid-2">
+          {/* Satellite Blogs */}
+          <div className="card card-compact">
+            <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+              Satellite Blog Network
+            </div>
+            {(() => {
+              const sat = report.growth?.satelliteBlogs || satelliteBlogData?.stats;
+              if (!sat) return <div className="text-sm text-muted">No satellite blog data</div>;
+              return (
+                <>
+                  <div className="stats-row" style={{ marginBottom: 12 }}>
+                    <StatBlock value={sat.activeCount ?? sat.activeBlogs ?? 0} label="Active Blogs" color="var(--accent)" />
+                    <StatBlock value={sat.todayPosts ?? 0} label="Posts Today" />
+                    <StatBlock value={sat.totalPosts ?? 0} label="Total Posts" />
+                    <StatBlock value={sat.totalBacklinks ?? 0} label="Total Backlinks" color="var(--green)" />
+                  </div>
+                  {sat.linkTypeDistribution && Object.keys(sat.linkTypeDistribution).length > 0 && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {Object.entries(sat.linkTypeDistribution).map(([type, count]) => (
+                        <span key={type} className="badge badge-muted" style={{ fontSize: 10 }}>
+                          {type}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {satelliteBlogData?.blogs?.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      {satelliteBlogData.blogs.map(blog => (
+                        <div key={blog.id} className="info-row">
+                          <span className="info-label" style={{ fontSize: 12 }}>
+                            {blog.name} <span className="text-xs text-muted">({blog.domain})</span>
+                          </span>
+                          <span className="info-value" style={{ fontSize: 12 }}>
+                            {blog.posts_generated || 0} posts / {blog.backlinks_created || 0} links
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
+          {/* Vertical Tools */}
+          <div className="card card-compact">
+            <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+              Vertical Tools
+            </div>
+            {(() => {
+              const vt = report.growth?.verticalTools || verticalToolData?.stats;
+              if (!vt) return <div className="text-sm text-muted">No vertical tool data</div>;
+              return (
+                <>
+                  <div className="stats-row" style={{ marginBottom: 12 }}>
+                    <StatBlock value={vt.activeCount ?? vt.activeTools ?? 0} label="Active Tools" color="var(--accent)" />
+                    <StatBlock value={vt.totalVisits ?? 0} label="Total Visits" />
+                    <StatBlock value={vt.totalConversions ?? 0} label="Conversions" color="var(--green)" />
+                    <StatBlock value={vt.conversionRate != null ? `${vt.conversionRate}%` : (vt.overallConversionRate != null ? `${vt.overallConversionRate}%` : '—')} label="Conv. Rate" />
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Discount Codes Generated</span>
+                    <span className="info-value">{vt.totalDiscountCodes ?? 0}</span>
+                  </div>
+                  {verticalToolData?.tools?.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      {verticalToolData.tools.map(tool => (
+                        <div key={tool.id} className="info-row">
+                          <span className="info-label" style={{ fontSize: 12 }}>
+                            {tool.name} <span className="text-xs text-muted">({tool.tool_type})</span>
+                          </span>
+                          <span className="info-value" style={{ fontSize: 12 }}>
+                            {tool.visits || 0} visits / {tool.conversions || 0} conv.
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Ad Creatives ─────────────────────────── */}
+      <div className="section">
+        <div className="section-header"><h2>Ad Creatives</h2></div>
+        <div className="stat-row">
+          <StatBlock label="This Week" value={report.adCreatives?.thisWeek ?? adCreativeStats?.total ?? 0} />
+          <StatBlock label="Pending Approval" value={report.adCreatives?.pendingApproval ?? adCreativeStats?.byStatus?.pending ?? 0} color="#d97706" />
+          <StatBlock label="Compliance Flags" value={report.adCreatives?.complianceFlags ?? adCreativeStats?.complianceFlags ?? 0} color={report.adCreatives?.complianceFlags > 0 || (adCreativeStats?.complianceFlags || 0) > 0 ? '#dc2626' : undefined} />
+        </div>
+        {(() => {
+          const byProduct = report.adCreatives?.byProduct || adCreativeStats?.byProduct || {};
+          const byPlatform = report.adCreatives?.byPlatform || adCreativeStats?.byPlatform || {};
+          return (Object.keys(byProduct).length > 0 || Object.keys(byPlatform).length > 0) ? (
+            <div className="grid-2" style={{ marginTop: 12 }}>
+              {Object.keys(byProduct).length > 0 && (
+                <div className="card card-compact">
+                  <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+                    By Product
+                  </div>
+                  {Object.entries(byProduct).map(([p, count]) => (
+                    <div key={p} className="info-row">
+                      <span className="info-label">{p}</span>
+                      <span className="info-value">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {Object.keys(byPlatform).length > 0 && (
+                <div className="card card-compact">
+                  <div className="text-xs text-muted font-semibold" style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+                    By Platform
+                  </div>
+                  {Object.entries(byPlatform).map(([p, count]) => (
+                    <div key={p} className="info-row">
+                      <span className="info-label">{p}</span>
+                      <span className="info-value">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null;
+        })()}
       </div>
     </>
   );

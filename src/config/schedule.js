@@ -19,7 +19,7 @@ const schedule = {
     { agentId: 'outreach-prospector', cron: '30 8 * * *', description: 'Lead search + email drafting' },
     { agentId: 'intelligence-analyst', cron: '0 9 * * *', description: 'Daily research briefing' },
     { agentId: 'product-intelligence', cron: '0 9 * * *', description: 'Daily feature/pricing analysis' },
-    { agentId: 'ad-creative', cron: '30 9 * * *', description: 'Generate ad creatives (if scheduled)' },
+    { agentId: 'ad-creative', cron: '30 9 * * 3', description: 'Generate ad creatives (Wednesday)' },
   ],
 
   weekly: [

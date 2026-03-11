@@ -38,4 +38,4 @@ CREATE INDEX IF NOT EXISTS idx_pain_points_product ON pain_points(account_id, pr
 CREATE INDEX IF NOT EXISTS idx_pain_points_score ON pain_points(account_id, score DESC);
 
 ALTER TABLE pain_points ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "pain_points_account" ON pain_points FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
+DO $$ BEGIN CREATE POLICY "pain_points_account" ON pain_points FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

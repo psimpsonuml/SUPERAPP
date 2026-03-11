@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { fetchCalendarWeek, fetchCalendarEntry, updateCalendarEntryStatus } from '../../lib/api';
+import { fetchCalendarWeek, fetchCalendarEntry, updateCalendarEntryStatus, fetchContentLibrary } from '../../lib/api';
 import { PRODUCTS } from '../../lib/constants';
 
 const PRODUCT_COLORS = {
@@ -47,6 +47,7 @@ export default function CalendarPage() {
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [scenarioData, setScenarioData] = useState(null);
 
   const loadWeek = useCallback(async () => {
     setLoading(true);
@@ -60,6 +61,15 @@ export default function CalendarPage() {
   }, [offset]);
 
   useEffect(() => { loadWeek(); }, [loadWeek]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await fetchContentLibrary(30);
+        setScenarioData(data);
+      } catch { /* noop */ }
+    })();
+  }, []);
 
   async function openEntry(id) {
     setDetailLoading(true);
@@ -340,6 +350,89 @@ export default function CalendarPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── ChronoStates Scenario Library ──────────────── */}
+      {scenarioData && (
+        <div className="section" style={{ marginTop: 24 }}>
+          <div className="section-header">
+            <h2>ChronoStates Scenarios</h2>
+            <span className="text-xs text-muted">Content Library — upcoming and recently added</span>
+          </div>
+
+          <div className="stats-row" style={{ marginBottom: 16 }}>
+            <StatBlock value={scenarioData.stats?.thisWeek ?? 0} label="This Week" />
+            <StatBlock value={scenarioData.stats?.pendingApproval ?? 0} label="Pending Approval" color="var(--yellow)" />
+            <StatBlock value={scenarioData.stats?.injected ?? 0} label="Injected" color="var(--green)" />
+            <StatBlock value={scenarioData.stats?.total ?? 0} label="Total (30d)" />
+          </div>
+
+          {scenarioData.varietyCheck && (
+            <div style={{
+              padding: '8px 12px', borderRadius: 6, marginBottom: 16, fontSize: 12,
+              background: scenarioData.varietyCheck.passed ? '#ecfdf5' : '#fffbeb',
+              color: scenarioData.varietyCheck.passed ? '#059669' : '#d97706',
+              border: `1px solid ${scenarioData.varietyCheck.passed ? '#059669' : '#d97706'}22`,
+            }}>
+              Variety Check: {scenarioData.varietyCheck.passed ? 'PASSED' : 'NEEDS ATTENTION'} —
+              Eras: {scenarioData.varietyCheck.erasUsed?.join(', ') || 'none'} |
+              Regions: {scenarioData.varietyCheck.regionsUsed?.length || 0} unique |
+              Difficulties: {scenarioData.varietyCheck.difficultiesUsed?.join(', ') || 'none'}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+            {(scenarioData.scenarios || []).slice(0, 12).map(scenario => {
+              const diffColor = scenario.difficulty === 'easy' ? '#059669' : scenario.difficulty === 'medium' ? '#d97706' : '#dc2626';
+              const statusColor = scenario.injected ? '#059669' : scenario.approval_status === 'pending' ? '#d97706' : scenario.approval_status === 'auto_approved' || scenario.approval_status === 'approved' ? '#2563eb' : '#888';
+              const statusLabel = scenario.injected ? 'Injected' : scenario.approval_status === 'pending' ? 'Pending' : scenario.approval_status === 'auto_approved' ? 'Auto-Approved' : scenario.approval_status || 'Unknown';
+
+              return (
+                <div key={scenario.id} style={{
+                  background: 'var(--card-bg)', borderRadius: 8, padding: 14,
+                  border: '1px solid var(--border)',
+                  borderLeft: `3px solid ${diffColor}`,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                    <div className="font-semibold" style={{ fontSize: 13, lineHeight: 1.3, flex: 1 }}>{scenario.title}</div>
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+                      background: `${diffColor}18`, color: diffColor, marginLeft: 8, whiteSpace: 'nowrap',
+                    }}>
+                      {scenario.difficulty?.toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <span className="badge badge-purple" style={{ fontSize: 10 }}>{scenario.era}</span>
+                    <span className="badge badge-blue" style={{ fontSize: 10 }}>{scenario.region}</span>
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+                      background: `${statusColor}18`, color: statusColor,
+                    }}>
+                      {statusLabel}
+                    </span>
+                    {scenario.translations && Object.keys(scenario.translations).length > 0 && (
+                      <span className="badge badge-muted" style={{ fontSize: 10 }}>
+                        +{Object.keys(scenario.translations).length} langs
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-muted" style={{ lineHeight: 1.4 }}>
+                    {scenario.description?.slice(0, 120)}{scenario.description?.length > 120 ? '...' : ''}
+                  </div>
+
+                  {scenario.decision_point_count > 0 && (
+                    <div className="text-xs text-muted" style={{ marginTop: 6 }}>
+                      {scenario.decision_point_count} decision points
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

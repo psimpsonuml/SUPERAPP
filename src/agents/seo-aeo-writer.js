@@ -24,8 +24,9 @@ class SeoAeoWriterAgent extends BaseAgent {
 
   // ── Main run ───────────────────────────────────────────
   async run() {
-    const results = { postsGenerated: 0, repurposeChainsStarted: 0, keywordsUsed: [], posts: [] };
+    const results = { postsGenerated: 0, repurposeChainsStarted: 0, keywordsUsed: [], posts: [], satellitePosts: [] };
 
+    // Phase 1: Main product blog posts
     for (const productId of Object.keys(products)) {
       const keyword = await this.selectKeyword(productId);
       if (!keyword) {
@@ -79,6 +80,7 @@ class SeoAeoWriterAgent extends BaseAgent {
           externalLinks: article.externalLinks,
           wordCount: article.wordCount,
           altTexts: article.altTexts,
+          targetBlog: 'main',
         },
       });
 
@@ -96,6 +98,7 @@ class SeoAeoWriterAgent extends BaseAgent {
           chainId,
           article,
           keyword: keyword.keyword,
+          targetBlog: 'main',
         },
       });
 
@@ -114,7 +117,19 @@ class SeoAeoWriterAgent extends BaseAgent {
         keyword: keyword.keyword,
         wordCount: article.wordCount,
         tier,
+        targetBlog: 'main',
       });
+    }
+
+    // Phase 2: Satellite blog posts (Mon/Wed/Fri)
+    const dayOfWeek = new Date().getDay();
+    if ([1, 3, 5].includes(dayOfWeek)) {
+      try {
+        const satResults = await this.generateSatellitePosts();
+        results.satellitePosts = satResults;
+      } catch (e) {
+        this.logger.warn('Satellite blog generation failed', { error: e.message });
+      }
     }
 
     // Run Backlink Builder sub-agent
@@ -126,6 +141,158 @@ class SeoAeoWriterAgent extends BaseAgent {
     }
 
     return results;
+  }
+
+  // ── Satellite blog post generation ────────────────────
+  async generateSatellitePosts() {
+    const { data: blogs } = await this.supabase
+      .from('satellite_blogs')
+      .select('*')
+      .eq('account_id', this.accountId)
+      .eq('status', 'active');
+
+    if (!blogs?.length) return [];
+
+    const results = [];
+    for (const blog of blogs) {
+      try {
+        const post = await this.generateSatellitePost(blog);
+        if (post) results.push(post);
+      } catch (e) {
+        this.logger.warn(`Satellite post failed for ${blog.domain}`, { error: e.message });
+      }
+    }
+    return results;
+  }
+
+  async generateSatellitePost(blog) {
+    const voiceProfile = blog.voice_profile || {};
+    const voiceInstructions = voiceProfile.tone
+      ? `\nEditorial voice: ${voiceProfile.tone}. Style: ${voiceProfile.style || 'informative'}. Persona: ${voiceProfile.persona || 'industry expert'}.`
+      : '';
+
+    // Pick a topic-relevant keyword
+    const { data: recentPosts } = await this.supabase
+      .from('satellite_posts')
+      .select('keyword')
+      .eq('satellite_blog_id', blog.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    const usedKeywords = (recentPosts || []).map(p => p.keyword).filter(Boolean);
+
+    // Generate the satellite article via Claude
+    const shouldLinkProduct = Math.random() < 0.65; // ~65% include a product link
+    const anchorTypes = ['branded', 'generic', 'contextual'];
+    const anchorType = anchorTypes[Math.floor(Math.random() * anchorTypes.length)];
+
+    const product = products[blog.parent_product];
+    const productName = product?.name || blog.parent_product;
+
+    const anchorExamples = {
+      branded: productName,
+      generic: 'check out this tool',
+      contextual: `a ${blog.topic}-focused solution`,
+    };
+
+    const response = await this.anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4000,
+      system: `You are a blogger writing for ${blog.name} (${blog.domain}), a blog about ${blog.topic}.${voiceInstructions}
+
+This blog has its own distinct editorial voice — it is NOT a corporate blog. Write naturally as an independent expert in the ${blog.topic} space.`,
+      messages: [{
+        role: 'user',
+        content: `Write a 1200-1800 word blog post for ${blog.name} about ${blog.topic}.
+
+Requirements:
+1. Choose a specific, interesting angle within the ${blog.topic} niche
+2. Write a compelling headline and full article in Markdown
+3. Use short paragraphs, subheadings, and a conversational tone
+4. Include 2-3 internal links to other topics on this blog (use placeholder [internal-link] tags)
+5. Include 1-2 external links to authoritative sources
+${shouldLinkProduct ? `6. Naturally mention and link to ${productName} once using anchor text: "${anchorExamples[anchorType]}" — the link should feel organic, not promotional` : '6. Do NOT mention any products — keep this purely informational'}
+7. Avoid keywords already used: ${usedKeywords.slice(0, 10).join(', ') || 'none yet'}
+
+Respond with JSON:
+{
+  "title": "Article headline",
+  "keyword": "primary keyword targeted",
+  "body": "Full article in markdown",
+  "anchorText": "exact anchor text used for product link (or null if none)"
+}`,
+      }],
+    });
+
+    let parsed;
+    try {
+      parsed = JSON.parse(response.content[0]?.text || '{}');
+    } catch {
+      this.logger.warn('Failed to parse satellite post response', { blog: blog.domain });
+      return null;
+    }
+
+    const body = parsed.body || '';
+    const wordCount = body.split(/\s+/).filter(Boolean).length;
+
+    if (wordCount < 800) {
+      this.logger.warn(`Satellite post too short (${wordCount} words)`, { blog: blog.domain });
+      return null;
+    }
+
+    // Store the satellite post
+    const { data: postRecord } = await this.supabase
+      .from('satellite_posts')
+      .insert({
+        account_id: this.accountId,
+        satellite_blog_id: blog.id,
+        title: parsed.title,
+        keyword: parsed.keyword,
+        word_count: wordCount,
+        has_product_link: shouldLinkProduct,
+        anchor_text: shouldLinkProduct ? (parsed.anchorText || anchorExamples[anchorType]) : null,
+        link_type: shouldLinkProduct ? anchorType : null,
+        internal_links_count: (body.match(/\[internal-link\]/g) || []).length,
+        external_links_count: (body.match(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g) || []).length,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    // Update blog stats
+    await this.supabase
+      .from('satellite_blogs')
+      .update({
+        posts_generated: blog.posts_generated + 1,
+        backlinks_created: shouldLinkProduct ? blog.backlinks_created + 1 : blog.backlinks_created,
+      })
+      .eq('id', blog.id);
+
+    // Submit for Tier 2 approval
+    await this.submitForApproval({
+      itemType: 'satellite_post',
+      tier: 2,
+      contentPreview: `[Satellite: ${blog.name}] ${parsed.title} — ${wordCount} words${shouldLinkProduct ? ` (${anchorType} link)` : ' (no product link)'}`,
+      fullContent: {
+        blogId: blog.id,
+        blogDomain: blog.domain,
+        postId: postRecord?.id,
+        article: parsed,
+        anchorType: shouldLinkProduct ? anchorType : null,
+        wordCount,
+        targetBlog: 'satellite',
+      },
+    });
+
+    return {
+      blog: blog.name,
+      domain: blog.domain,
+      title: parsed.title,
+      keyword: parsed.keyword,
+      wordCount,
+      hasProductLink: shouldLinkProduct,
+      anchorType: shouldLinkProduct ? anchorType : null,
+    };
   }
 
   // ── Keyword selection ──────────────────────────────────

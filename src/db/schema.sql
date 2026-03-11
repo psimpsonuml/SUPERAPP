@@ -688,34 +688,40 @@ ALTER TABLE builder_intel ENABLE ROW LEVEL SECURITY;
 ALTER TABLE release_digest ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies: service role bypasses, authenticated users see only their account
-CREATE POLICY account_isolation ON brand_profiles FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON content_memory FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON keyword_map FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON community_profiles FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON content_calendar FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON prospect_pipeline FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON sending_domains FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON pain_points FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON product_intelligence FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON intelligence_log FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON qa_results FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON approval_queue FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON user_lifecycle FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON event_calendar FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON agent_runs FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON infra_alerts FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON infra_check_results FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON outreach_sends FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON entertainment_items FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON entertainment_ratings FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON entertainment_people FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON cascade_scores FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON quiz_answers FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON quiz_profile FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON reminders FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON reminder_completions FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON family_log FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON book_items FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON book_ratings FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON builder_intel FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
-CREATE POLICY account_isolation ON release_digest FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID);
+-- Wrapped in DO blocks so they never error on re-run (Postgres has no CREATE POLICY IF NOT EXISTS)
+DO $$ BEGIN CREATE POLICY account_isolation ON brand_profiles FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON content_memory FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON keyword_map FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON community_profiles FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON content_calendar FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON prospect_pipeline FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON sending_domains FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON pain_points FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON product_intelligence FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON intelligence_log FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON qa_results FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON approval_queue FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON user_lifecycle FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON event_calendar FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON agent_runs FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON infra_alerts FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON infra_check_results FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON outreach_sends FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON entertainment_items FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON entertainment_ratings FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON entertainment_people FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON cascade_scores FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON quiz_answers FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON quiz_profile FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON reminders FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON reminder_completions FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON family_log FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON book_items FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON book_ratings FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON builder_intel FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY account_isolation ON release_digest FOR ALL USING (account_id = current_setting('app.current_account_id')::UUID); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Seed default account
+INSERT INTO accounts (id, name, plan) VALUES
+  ('00000000-0000-0000-0000-000000000001', 'BeaconOps Personal', 'personal')
+ON CONFLICT (id) DO NOTHING;

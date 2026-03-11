@@ -23,12 +23,12 @@ CREATE TABLE IF NOT EXISTS builder_intel (
 
 ALTER TABLE builder_intel ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "builder_intel_account_isolation" ON builder_intel
-  USING (account_id = current_setting('app.account_id', true)::uuid);
+DO $$ BEGIN CREATE POLICY "builder_intel_account_isolation" ON builder_intel
+  USING (account_id = current_setting('app.account_id', true)::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE INDEX idx_builder_intel_date ON builder_intel(account_id, date_found DESC);
-CREATE INDEX idx_builder_intel_type ON builder_intel(account_id, intel_type);
-CREATE INDEX idx_builder_intel_product ON builder_intel(account_id, product_relevance);
+CREATE INDEX IF NOT EXISTS idx_builder_intel_date ON builder_intel(account_id, date_found DESC);
+CREATE INDEX IF NOT EXISTS idx_builder_intel_type ON builder_intel(account_id, intel_type);
+CREATE INDEX IF NOT EXISTS idx_builder_intel_product ON builder_intel(account_id, product_relevance);
 
 -- Add builder_promo to content_calendar post_type check
 -- (Postgres doesn't support ALTER CHECK directly, so we drop and recreate)

@@ -1,5 +1,6 @@
 import './globals.css';
 import Sidebar from './components/Sidebar';
+import BeaconBot from './components/BeaconBot';
 
 export const metadata = {
   title: 'BeaconOps Dashboard',
@@ -15,6 +16,7 @@ export default function RootLayout({ children }) {
           <main className="main-content">
             {children}
           </main>
+          <BeaconBot />
         </div>
       </body>
     </html>

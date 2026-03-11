@@ -83,7 +83,7 @@ ALTER TABLE entertainment_ratings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entertainment_people ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cascade_scores ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "entertainment_items_account" ON entertainment_items FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
-CREATE POLICY "entertainment_ratings_account" ON entertainment_ratings FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
-CREATE POLICY "entertainment_people_account" ON entertainment_people FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
-CREATE POLICY "cascade_scores_account" ON cascade_scores FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
+DO $$ BEGIN CREATE POLICY "entertainment_items_account" ON entertainment_items FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "entertainment_ratings_account" ON entertainment_ratings FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "entertainment_people_account" ON entertainment_people FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "cascade_scores_account" ON cascade_scores FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

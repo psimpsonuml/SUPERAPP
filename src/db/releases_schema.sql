@@ -19,4 +19,4 @@ CREATE INDEX IF NOT EXISTS idx_release_digest_account ON release_digest(account_
 CREATE INDEX IF NOT EXISTS idx_release_digest_week ON release_digest(account_id, week_start DESC);
 
 ALTER TABLE release_digest ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "release_digest_account" ON release_digest FOR ALL USING (account_id = current_setting('app.account_id')::uuid);
+DO $$ BEGIN CREATE POLICY "release_digest_account" ON release_digest FOR ALL USING (account_id = current_setting('app.account_id')::uuid); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
