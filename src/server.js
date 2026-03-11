@@ -19,6 +19,7 @@ const releasesRoutes = require('./dashboard/routes/releases');
 const infrastructureRoutes = require('./dashboard/routes/infrastructure');
 const calendarRoutes = require('./dashboard/routes/calendar');
 const musicRoutes = require('./dashboard/routes/music');
+const onboardingRoutes = require('./dashboard/routes/onboarding');
 
 const app = express();
 
@@ -109,6 +110,7 @@ app.use('/api/releases', releasesRoutes); // Releases: weekly TMDB digest with p
 app.use('/api/infrastructure', infrastructureRoutes); // Infrastructure: status, uptime, alerts
 app.use('/api/calendar', requireSupabase, calendarRoutes); // Content calendar: weekly schedule
 app.use('/api/music', musicRoutes); // Music discovery: Spotify integration + cascade scoring
+app.use('/api/onboarding', requireSupabase, onboardingRoutes); // Onboarding: platform asset generation + setup checklists
 
 // API info
 app.get('/api', (_req, res) => {

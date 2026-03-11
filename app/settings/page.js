@@ -186,6 +186,7 @@ export default function SettingsPage() {
     { id: 'brand', label: 'Brand Voice' },
     { id: 'domains', label: 'Sending Domains' },
     { id: 'account', label: 'Account' },
+    { id: 'onboarding', label: 'Onboarding', href: '/settings/onboarding' },
   ];
 
   return (
@@ -197,13 +198,17 @@ export default function SettingsPage() {
 
       <div className="tabs">
         {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={`tab${tab === t.id ? ' tab-active' : ''}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
+          t.href ? (
+            <a key={t.id} href={t.href} className="tab" style={{ textDecoration: 'none' }}>{t.label}</a>
+          ) : (
+            <button
+              key={t.id}
+              className={`tab${tab === t.id ? ' tab-active' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </button>
+          )
         ))}
       </div>
 
