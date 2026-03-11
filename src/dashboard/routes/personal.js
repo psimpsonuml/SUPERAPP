@@ -223,13 +223,470 @@ router.post('/learning', async (req, res) => {
 
 // ── Health ────────────────────────────────────────────────────
 
+// GET /health — all metrics for a time range, grouped by type with today snapshot
 router.get('/health', async (req, res) => {
-  const days = parseInt(req.query.days) || 30;
-  const since = new Date(Date.now() - days * 86400000).toISOString();
-  const { data } = await safeQuery((sb) =>
-    sb.from('health_metrics').select('*').eq('account_id', req.accountId).gte('recorded_at', since).order('recorded_at', { ascending: false })
-  );
-  res.json({ metrics: data || [] });
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+    const { data: metrics } = await safeQuery(sb =>
+      sb.from('health_metrics').select('*')
+        .eq('account_id', req.accountId)
+        .gte('date', since)
+        .order('date', { ascending: false })
+    );
+
+    const allMetrics = metrics || [];
+
+    // Today's snapshot — latest value per metric type for today
+    const todayMetrics = allMetrics.filter(m => m.date === today);
+    const yesterdayMetrics = allMetrics.filter(m => m.date === yesterday);
+    const snapshot = {};
+    for (const m of todayMetrics) {
+      if (!snapshot[m.metric_type]) snapshot[m.metric_type] = m;
+    }
+    // Add deltas from yesterday
+    for (const [type, current] of Object.entries(snapshot)) {
+      const yesterdayVal = yesterdayMetrics.find(m => m.metric_type === type);
+      snapshot[type] = {
+        ...current,
+        delta: yesterdayVal ? +(current.value - yesterdayVal.value).toFixed(2) : null,
+      };
+    }
+
+    // Group by metric type for charts
+    const byType = {};
+    for (const m of allMetrics) {
+      if (!byType[m.metric_type]) byType[m.metric_type] = [];
+      byType[m.metric_type].push({ date: m.date, value: +m.value, source: m.source });
+    }
+    // Sort each type by date ascending for charting
+    for (const type of Object.keys(byType)) {
+      byType[type].sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    // Targets
+    const { data: targets } = await safeQuery(sb =>
+      sb.from('health_targets').select('*').eq('account_id', req.accountId)
+    );
+    const targetMap = {};
+    for (const t of (targets || [])) {
+      targetMap[t.metric_type] = +t.target_value;
+    }
+
+    res.json({ metrics: allMetrics, snapshot, byType, targets: targetMap, days });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /health/manual — manual metric entry
+router.post('/health/manual', async (req, res) => {
+  try {
+    const { metricType, value, unit, date } = req.body;
+    if (!metricType || value == null) {
+      return res.status(400).json({ error: 'metricType and value are required' });
+    }
+
+    const { data, error } = await safeQuery(sb =>
+      sb.from('health_metrics').insert({
+        account_id: req.accountId,
+        date: date || new Date().toISOString().slice(0, 10),
+        metric_type: metricType,
+        value: +value,
+        unit: unit || null,
+        source: 'manual',
+        recorded_at: new Date().toISOString(),
+      }).select().single()
+    );
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /health/import — import health data from Apple Health XML, Google Fit, Fitbit, or CSV
+router.post('/health/import', async (req, res) => {
+  try {
+    const { source, fileName, records } = req.body;
+    if (!source || !records?.length) {
+      return res.status(400).json({ error: 'source and records array are required' });
+    }
+
+    // Insert metrics in batches of 500
+    let imported = 0;
+    const batchSize = 500;
+    for (let i = 0; i < records.length; i += batchSize) {
+      const batch = records.slice(i, i + batchSize).map(r => ({
+        account_id: req.accountId,
+        date: r.date,
+        metric_type: r.metricType || r.metric_type,
+        value: +r.value,
+        unit: r.unit || null,
+        source,
+        recorded_at: r.recordedAt || r.recorded_at || new Date().toISOString(),
+      }));
+
+      const { error } = await safeQuery(sb =>
+        sb.from('health_metrics').upsert(batch, { onConflict: 'id' })
+      );
+      if (!error) imported += batch.length;
+    }
+
+    // Record import
+    await safeQuery(sb =>
+      sb.from('health_imports').insert({
+        account_id: req.accountId,
+        source,
+        file_name: fileName || `${source}-import`,
+        records_imported: imported,
+      })
+    );
+
+    res.json({ imported, source, fileName });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /health/imports — import history
+router.get('/health/imports', async (req, res) => {
+  try {
+    const { data } = await safeQuery(sb =>
+      sb.from('health_imports').select('*')
+        .eq('account_id', req.accountId)
+        .order('imported_at', { ascending: false })
+        .limit(20)
+    );
+    res.json({ imports: data || [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /health/targets — get all targets
+router.get('/health/targets', async (req, res) => {
+  try {
+    const { data } = await safeQuery(sb =>
+      sb.from('health_targets').select('*').eq('account_id', req.accountId)
+    );
+    res.json({ targets: data || [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /health/targets — set/update a target
+router.put('/health/targets', async (req, res) => {
+  try {
+    const { metricType, targetValue } = req.body;
+    if (!metricType || targetValue == null) {
+      return res.status(400).json({ error: 'metricType and targetValue are required' });
+    }
+
+    const { data, error } = await safeQuery(sb =>
+      sb.from('health_targets').upsert({
+        account_id: req.accountId,
+        metric_type: metricType,
+        target_value: +targetValue,
+        created_at: new Date().toISOString(),
+      }, { onConflict: 'account_id,metric_type' }).select().single()
+    );
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /health/workouts — workout log with filtering
+router.get('/health/workouts', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 90;
+    const workoutType = req.query.type;
+    const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+
+    let query = getSupabase().from('health_metrics').select('*')
+      .eq('account_id', req.accountId)
+      .eq('metric_type', 'workout')
+      .gte('date', since)
+      .order('date', { ascending: false });
+
+    if (workoutType) query = query.eq('unit', workoutType);
+
+    const { data, error } = await safeQuery(() => query.limit(200));
+    if (error) return res.status(500).json({ error: error.message });
+
+    const workouts = data || [];
+
+    // Monthly summary
+    const byMonth = {};
+    for (const w of workouts) {
+      const month = w.date.slice(0, 7);
+      if (!byMonth[month]) byMonth[month] = { count: 0, totalMinutes: 0, types: {} };
+      byMonth[month].count++;
+      byMonth[month].totalMinutes += +w.value || 0;
+      const type = w.unit || 'other';
+      byMonth[month].types[type] = (byMonth[month].types[type] || 0) + 1;
+    }
+
+    // Workout types for filter
+    const workoutTypes = [...new Set(workouts.map(w => w.unit).filter(Boolean))];
+
+    res.json({ workouts, byMonth, workoutTypes, total: workouts.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /health/correlations — AI-generated correlations
+router.get('/health/correlations', async (req, res) => {
+  try {
+    const { data } = await safeQuery(sb =>
+      sb.from('health_correlations').select('*')
+        .eq('account_id', req.accountId)
+        .order('generated_at', { ascending: false })
+        .limit(10)
+    );
+    res.json({ correlations: data || [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /health/correlations/generate — generate new correlations via Claude
+router.post('/health/correlations/generate', async (req, res) => {
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const anthropic = new Anthropic();
+
+    // Get 90 days of data
+    const since = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+    const { data: metrics } = await safeQuery(sb =>
+      sb.from('health_metrics').select('date, metric_type, value, unit')
+        .eq('account_id', req.accountId)
+        .gte('date', since)
+        .order('date', { ascending: true })
+    );
+
+    if (!metrics || metrics.length < 14) {
+      return res.json({ correlations: [], message: 'Need at least 2 weeks of data for correlations' });
+    }
+
+    // Build summary by type
+    const byType = {};
+    for (const m of metrics) {
+      if (!byType[m.metric_type]) byType[m.metric_type] = [];
+      byType[m.metric_type].push({ date: m.date, value: +m.value });
+    }
+
+    const summaryText = Object.entries(byType).map(([type, values]) => {
+      const avg = values.reduce((s, v) => s + v.value, 0) / values.length;
+      return `${type}: ${values.length} entries, avg=${avg.toFixed(1)}, range ${Math.min(...values.map(v => v.value)).toFixed(1)}-${Math.max(...values.map(v => v.value)).toFixed(1)}`;
+    }).join('\n');
+
+    // Daily aligned data for cross-correlation
+    const dates = [...new Set(metrics.map(m => m.date))].sort();
+    const dailyData = dates.slice(-60).map(date => {
+      const dayMetrics = {};
+      metrics.filter(m => m.date === date).forEach(m => { dayMetrics[m.metric_type] = +m.value; });
+      return { date, ...dayMetrics };
+    });
+
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 800,
+      messages: [{
+        role: 'user',
+        content: `Analyze this health data and find 3-5 meaningful correlations between metrics. Be specific with numbers.
+
+Metric summaries:
+${summaryText}
+
+Daily data (last 60 days, JSON):
+${JSON.stringify(dailyData.slice(-30))}
+
+Respond with ONLY a JSON array of correlation strings. Each should be a specific, data-backed observation like:
+["You sleep 45 minutes longer on days you exceed 8,000 steps", "Your resting heart rate drops 3 BPM during weeks with 3+ workouts"]`,
+      }],
+    });
+
+    let correlations;
+    try {
+      correlations = JSON.parse(response.content[0]?.text || '[]');
+    } catch {
+      correlations = [];
+    }
+
+    // Store correlations
+    const metricsInvolved = Object.keys(byType);
+    for (const text of correlations) {
+      await safeQuery(sb =>
+        sb.from('health_correlations').insert({
+          account_id: req.accountId,
+          correlation_text: text,
+          metrics_involved: metricsInvolved,
+        })
+      );
+    }
+
+    res.json({ correlations: correlations.map(c => ({ correlation_text: c, generated_at: new Date().toISOString() })) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /health/digest — weekly health digest
+router.get('/health/digest', async (req, res) => {
+  try {
+    const { data } = await safeQuery(sb =>
+      sb.from('health_digests').select('*')
+        .eq('account_id', req.accountId)
+        .order('week_start', { ascending: false })
+        .limit(4)
+    );
+    res.json({ digests: data || [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /health/digest/generate — generate weekly digest via Claude
+router.post('/health/digest/generate', async (req, res) => {
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const anthropic = new Anthropic();
+
+    // Get last 7 days
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const weekStart = weekAgo;
+    const { data: metrics } = await safeQuery(sb =>
+      sb.from('health_metrics').select('date, metric_type, value, unit')
+        .eq('account_id', req.accountId)
+        .gte('date', weekAgo)
+        .order('date', { ascending: true })
+    );
+
+    if (!metrics || metrics.length < 7) {
+      return res.json({ digest: null, message: 'Need at least a week of data for a digest' });
+    }
+
+    // Get targets
+    const { data: targets } = await safeQuery(sb =>
+      sb.from('health_targets').select('metric_type, target_value').eq('account_id', req.accountId)
+    );
+    const targetText = (targets || []).map(t => `${t.metric_type}: target ${t.target_value}`).join(', ');
+
+    // Summarize by type
+    const byType = {};
+    for (const m of metrics) {
+      if (!byType[m.metric_type]) byType[m.metric_type] = [];
+      byType[m.metric_type].push({ date: m.date, value: +m.value });
+    }
+
+    const summaryText = Object.entries(byType).map(([type, values]) => {
+      const avg = values.reduce((s, v) => s + v.value, 0) / values.length;
+      const daysHit = values.length;
+      return `${type}: ${daysHit} days tracked, avg=${avg.toFixed(1)}, min=${Math.min(...values.map(v => v.value)).toFixed(1)}, max=${Math.max(...values.map(v => v.value)).toFixed(1)}`;
+    }).join('\n');
+
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      messages: [{
+        role: 'user',
+        content: `Write a brief, encouraging weekly health summary (150-200 words) for this person. Be specific with their numbers. Note what went well, what needs attention, and any patterns.
+
+This week's health data:
+${summaryText}
+
+Personal targets: ${targetText || 'none set'}
+
+Write conversationally, like a supportive coach. Use specific numbers from their data.`,
+      }],
+    });
+
+    const digestText = response.content[0]?.text || '';
+
+    // Store digest
+    const metricsSummary = {};
+    for (const [type, values] of Object.entries(byType)) {
+      metricsSummary[type] = {
+        avg: +(values.reduce((s, v) => s + v.value, 0) / values.length).toFixed(1),
+        days: values.length,
+      };
+    }
+
+    await safeQuery(sb =>
+      sb.from('health_digests').upsert({
+        account_id: req.accountId,
+        digest_text: digestText,
+        week_start: weekStart,
+        metrics_summary: metricsSummary,
+      }, { onConflict: 'account_id,week_start' })
+    );
+
+    res.json({ digest: { digest_text: digestText, week_start: weekStart, metrics_summary: metricsSummary, generated_at: new Date().toISOString() } });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /health/dna-crossref — cross-reference health with DNA data if available
+router.get('/health/dna-crossref', async (req, res) => {
+  try {
+    // Check if DNA data exists
+    const { data: dnaData } = await safeQuery(sb =>
+      sb.from('dna_analysis').select('analysis_type, results')
+        .eq('account_id', req.accountId)
+        .limit(5)
+    );
+
+    if (!dnaData?.length) {
+      return res.json({ available: false, insights: [] });
+    }
+
+    // Check if we have health metrics
+    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const { data: metrics } = await safeQuery(sb =>
+      sb.from('health_metrics').select('metric_type, value, date')
+        .eq('account_id', req.accountId)
+        .gte('date', since)
+        .limit(100)
+    );
+
+    if (!metrics?.length) {
+      return res.json({ available: true, insights: [], message: 'Need health data for cross-reference' });
+    }
+
+    res.json({
+      available: true,
+      dnaTraits: dnaData.map(d => d.analysis_type),
+      healthMetrics: [...new Set(metrics.map(m => m.metric_type))],
+      insights: [],
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /health — delete all health data
+router.delete('/health', async (req, res) => {
+  try {
+    await safeQuery(sb => sb.from('health_metrics').delete().eq('account_id', req.accountId));
+    await safeQuery(sb => sb.from('health_targets').delete().eq('account_id', req.accountId));
+    await safeQuery(sb => sb.from('health_imports').delete().eq('account_id', req.accountId));
+    await safeQuery(sb => sb.from('health_correlations').delete().eq('account_id', req.accountId));
+    await safeQuery(sb => sb.from('health_digests').delete().eq('account_id', req.accountId));
+    res.json({ deleted: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ── News Feed ────────────────────────────────────────────────
