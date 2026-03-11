@@ -46,10 +46,10 @@ CREATE TABLE IF NOT EXISTS news_briefings (
   briefing_text TEXT NOT NULL,
   story_count INTEGER DEFAULT 0,
   topics_covered JSONB DEFAULT '[]',
-  generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(account_id, (generated_at::DATE))
+  generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_news_briefings_unique_daily ON news_briefings(account_id, CAST(generated_at AS DATE));
 CREATE INDEX IF NOT EXISTS idx_news_briefings_account ON news_briefings(account_id, generated_at DESC);
 
 -- Feed preferences: saved filter/source settings

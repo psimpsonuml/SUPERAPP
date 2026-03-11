@@ -11,7 +11,7 @@ import {
   addBookChapter,
   updateBookChapter,
   editAssistChapter,
-  fetchBookPublishing,
+  fetchBookPublishingPlatforms,
   addBookPublishing,
   updateBookPublishing,
   fetchBookQueries,
@@ -294,7 +294,7 @@ export default function BookPublishingPage() {
           break;
         }
         case 'Publishing': {
-          const res = await fetchBookPublishing(selectedBookId, accountId);
+          const res = await fetchBookPublishingPlatforms(selectedBookId, accountId);
           setPublishing(res.publishing || []);
           break;
         }
