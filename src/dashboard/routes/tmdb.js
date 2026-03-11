@@ -137,7 +137,10 @@ async function runCascade(accountId, itemId) {
 // GET /api/tmdb/discover?feed=popular|top_rated|now_playing&page=1&genre=28
 router.get('/discover', async (req, res) => {
   try {
-    const { feed = 'popular', page = 1, genre, media_type = 'movie' } = req.query;
+    const { feed = 'popular', page = 1, genre, media_type = 'movie', year, decade, language } = req.query;
+
+    // If any filter is active, always use discover endpoint
+    const hasFilters = genre || year || decade || language;
 
     const feedMap = {
       popular: media_type === 'tv' ? '/tv/popular' : '/movie/popular',
@@ -146,11 +149,43 @@ router.get('/discover', async (req, res) => {
       discover: media_type === 'tv' ? '/discover/tv' : '/discover/movie',
     };
 
-    const path = genre ? feedMap.discover : (feedMap[feed] || feedMap.popular);
+    const path = hasFilters ? feedMap.discover : (feedMap[feed] || feedMap.popular);
     const params = { page };
+
+    if (hasFilters) {
+      params.sort_by = 'popularity.desc';
+    }
+
     if (genre) {
       params.with_genres = genre;
-      params.sort_by = 'popularity.desc';
+      if (!hasFilters) params.sort_by = 'popularity.desc';
+    }
+
+    // Year filter: exact year
+    if (year) {
+      if (media_type === 'tv') {
+        params.first_air_date_year = year;
+      } else {
+        params.primary_release_year = year;
+      }
+    }
+
+    // Decade filter: e.g. "1990" means 1990-1999
+    if (decade && !year) {
+      const decadeStart = parseInt(decade);
+      const decadeEnd = decadeStart + 9;
+      if (media_type === 'tv') {
+        params['first_air_date.gte'] = `${decadeStart}-01-01`;
+        params['first_air_date.lte'] = `${decadeEnd}-12-31`;
+      } else {
+        params['primary_release_date.gte'] = `${decadeStart}-01-01`;
+        params['primary_release_date.lte'] = `${decadeEnd}-12-31`;
+      }
+    }
+
+    // Language filter: ISO 639-1 code (e.g. "en", "ko", "ja")
+    if (language) {
+      params.with_original_language = language;
     }
 
     const data = await tmdbFetch(path, params);
