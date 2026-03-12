@@ -48,6 +48,9 @@ const REQUIRED_TABLES = [
   { table: 'companion_settings', checkCol: 'mode' },
   { table: 'companion_conversations', checkCol: 'messages_json' },
   { table: 'companion_checkins', checkCol: 'checkin_message' },
+  { table: 'satellite_blogs', checkCol: 'blog_id' },
+  { table: 'vertical_tools', checkCol: 'tool_id' },
+  { table: 'discount_codes', checkCol: 'code' },
 ];
 
 async function checkTable(supabase, table, checkCol) {

@@ -872,6 +872,104 @@ INSERT INTO feature_visibility (feature_id, feature_name, category, visibility, 
   ('system-admin', 'System Admin', 'configuration', 'internal_only', 'Raw Supabase admin access')
 ON CONFLICT (feature_id) DO NOTHING;
 
+-- ============================================================
+-- SATELLITE BLOGS & VERTICAL TOOLS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS satellite_blogs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id),
+  blog_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  tagline TEXT,
+  accent_color TEXT DEFAULT '#2563EB',
+  parent_product TEXT,
+  categories JSONB DEFAULT '[]'::JSONB,
+  github_repo TEXT,
+  vercel_project_id TEXT,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'paused', 'offline')),
+  post_count INTEGER DEFAULT 0,
+  last_published_at TIMESTAMPTZ,
+  monthly_visitors INTEGER DEFAULT 0,
+  monthly_pageviews INTEGER DEFAULT 0,
+  metadata JSONB DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(account_id, blog_id)
+);
+
+CREATE TABLE IF NOT EXISTS vertical_tools (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id),
+  tool_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  description TEXT,
+  accent_color TEXT DEFAULT '#2563EB',
+  parent_product TEXT,
+  github_repo TEXT,
+  vercel_project_id TEXT,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'paused', 'offline')),
+  total_visitors INTEGER DEFAULT 0,
+  total_conversions INTEGER DEFAULT 0,
+  conversion_rate NUMERIC(5,2) DEFAULT 0,
+  discount_codes_generated INTEGER DEFAULT 0,
+  monthly_visitors INTEGER DEFAULT 0,
+  metadata JSONB DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(account_id, tool_id)
+);
+
+CREATE TABLE IF NOT EXISTS discount_codes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id),
+  code TEXT NOT NULL UNIQUE,
+  tool_id TEXT NOT NULL,
+  parent_product TEXT NOT NULL,
+  stripe_coupon_id TEXT,
+  discount_percent INTEGER DEFAULT 20,
+  session_id TEXT,
+  redeemed BOOLEAN DEFAULT FALSE,
+  redeemed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE satellite_blogs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vertical_tools ENABLE ROW LEVEL SECURITY;
+ALTER TABLE discount_codes ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY satellite_blogs_account ON satellite_blogs FOR ALL USING (account_id = current_setting('app.account_id', true)::UUID);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY vertical_tools_account ON vertical_tools FOR ALL USING (account_id = current_setting('app.account_id', true)::UUID);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY discount_codes_account ON discount_codes FOR ALL USING (account_id = current_setting('app.account_id', true)::UUID);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Seed satellite blogs
+INSERT INTO satellite_blogs (account_id, blog_id, name, domain, tagline, accent_color, parent_product, categories, github_repo) VALUES
+  ('00000000-0000-0000-0000-000000000001', 'thepayrollbrief', 'The Payroll Brief', 'thepayrollbrief.com', 'Payroll news, compliance updates, and industry insights', '#2563EB', 'Payroll Beacon', '["compliance","legislation","industry news","best practices","state updates"]', 'psimpsonuml/thepayrollbrief'),
+  ('00000000-0000-0000-0000-000000000001', 'smallbizhrguide', 'Small Biz HR Guide', 'smallbizhrguide.com', 'Practical HR tips for growing businesses', '#059669', 'Payroll Beacon', '["hiring","compliance","employee management","benefits","culture"]', 'psimpsonuml/smallbizhrguide'),
+  ('00000000-0000-0000-0000-000000000001', 'moneyclarityguide', 'Money Clarity Guide', 'moneyclarityguide.com', 'See your finances clearly', '#0891B2', 'Budgeting Beacon', '["budgeting","saving","debt","investing","financial literacy"]', 'psimpsonuml/moneyclarityguide'),
+  ('00000000-0000-0000-0000-000000000001', 'ourmoneystory', 'Our Money Story', 'ourmoneystory.com', 'Real talk about couples, families, and finances', '#E11D48', 'Budgeting Beacon', '["couples budgeting","family finances","money conversations","teaching kids","shared goals"]', 'psimpsonuml/ourmoneystory'),
+  ('00000000-0000-0000-0000-000000000001', 'counterfactualist', 'The Counterfactualist', 'counterfactualist.com', 'Exploring the histories that never were', '#92400E', 'ChronoStates', '["what if","alternate timelines","historical analysis","counterfactual essays","book reviews"]', 'psimpsonuml/counterfactualist'),
+  ('00000000-0000-0000-0000-000000000001', 'aivibecoderweekly', 'AI Vibe Coder Weekly', 'aivibecoderweekly.com', 'AI tools, indie building, and the vibe coding movement', '#7C3AED', 'ChronoStates', '["AI tools","vibe coding","indie hacking","build in public","tutorials","tool reviews"]', 'psimpsonuml/aivibecoderweekly')
+ON CONFLICT (account_id, blog_id) DO NOTHING;
+
+-- Seed vertical tools
+INSERT INTO vertical_tools (account_id, tool_id, name, domain, description, accent_color, parent_product, github_repo) VALUES
+  ('00000000-0000-0000-0000-000000000001', 'payrollcompliancecheck', 'Payroll Compliance Check', 'payrollcompliancecheck.com', 'Free multi-state payroll compliance checker', '#2563EB', 'Payroll Beacon', 'psimpsonuml/payrollcompliancecheck'),
+  ('00000000-0000-0000-0000-000000000001', 'instantbudgetcheck', 'Instant Budget Check', 'instantbudgetcheck.com', 'Free budgeting calculator with 50/30/20 breakdown', '#10B981', 'Budgeting Beacon', 'psimpsonuml/instantbudgetcheck'),
+  ('00000000-0000-0000-0000-000000000001', 'althistoryquiz', 'Alt History Quiz', 'althistoryquiz.com', 'Fun shareable alternate history personality quiz', '#92400E', 'ChronoStates', 'psimpsonuml/althistoryquiz')
+ON CONFLICT (account_id, tool_id) DO NOTHING;
+
 -- Seed default account
 INSERT INTO accounts (id, name, plan) VALUES
   ('00000000-0000-0000-0000-000000000001', 'BeaconOps Personal', 'personal')
