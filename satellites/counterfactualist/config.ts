@@ -4,6 +4,12 @@ export const BLOG_CONFIG = {
   domain: 'counterfactualist.com',
   satelliteBlogId: 'counterfactualist',
   parentProduct: 'ChronoStates',
+
+  // Publisher / Organization (for JSON-LD)
+  publisher: 'BeaconOps',
+  publisherUrl: 'https://beaconops.com',
+  publisherLogo: 'https://beaconops.com/logo.png',
+  language: 'en-US',
   accentColor: '#92400E',
   accentColorLight: '#FEF3C7',
   logoEmoji: '🔮',

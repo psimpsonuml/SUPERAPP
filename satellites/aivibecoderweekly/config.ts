@@ -4,6 +4,12 @@ export const BLOG_CONFIG = {
   domain: 'aivibecoderweekly.com',
   satelliteBlogId: 'aivibecoderweekly',
   parentProduct: 'ChronoStates',
+
+  // Publisher / Organization (for JSON-LD)
+  publisher: 'BeaconOps',
+  publisherUrl: 'https://beaconops.com',
+  publisherLogo: 'https://beaconops.com/logo.png',
+  language: 'en-US',
   accentColor: '#7C3AED',
   accentColorLight: '#EDE9FE',
   logoEmoji: '⚡',

@@ -4,6 +4,12 @@ export const BLOG_CONFIG = {
   domain: 'smallbizhrguide.com',
   satelliteBlogId: 'smallbizhrguide',
   parentProduct: 'Payroll Beacon',
+
+  // Publisher / Organization (for JSON-LD)
+  publisher: 'BeaconOps',
+  publisherUrl: 'https://beaconops.com',
+  publisherLogo: 'https://beaconops.com/logo.png',
+  language: 'en-US',
   accentColor: '#059669',
   accentColorLight: '#D1FAE5',
   logoEmoji: '👥',

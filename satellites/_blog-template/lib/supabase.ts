@@ -19,6 +19,7 @@ export interface Post {
   published_at: string;
   og_image_url?: string;
   meta_description?: string;
+  updated_at?: string;
   satellite_blog_id: string;
 }
 

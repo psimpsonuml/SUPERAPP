@@ -380,6 +380,55 @@ export default function Home() {
               </div>
             </div>
 
+            {/* FAQ */}
+            <div className="section-card faq-section">
+              <h3>Frequently Asked Questions</h3>
+              <details className="faq-item">
+                <summary>What is the 50/30/20 budget rule?</summary>
+                <p>
+                  The 50/30/20 rule is a budgeting guideline that allocates 50%
+                  of after-tax income to needs (housing, utilities, groceries),
+                  30% to wants (dining, entertainment, subscriptions), and 20%
+                  to savings and debt repayment.
+                </p>
+              </details>
+              <details className="faq-item">
+                <summary>Is the Instant Budget Check free?</summary>
+                <p>
+                  Yes, our budget calculator is completely free and runs entirely
+                  in your browser. No data is sent to any server &mdash; your
+                  financial information stays private.
+                </p>
+              </details>
+              <details className="faq-item">
+                <summary>What is a good savings rate?</summary>
+                <p>
+                  Financial experts recommend saving at least 20% of your
+                  after-tax income. A savings rate above 20% is excellent,
+                  10&ndash;20% is good, and below 10% suggests you should look
+                  for ways to reduce expenses.
+                </p>
+              </details>
+              <details className="faq-item">
+                <summary>What is debt-to-income ratio?</summary>
+                <p>
+                  Debt-to-income (DTI) ratio is the percentage of your monthly
+                  income that goes toward debt payments. A DTI below 20% is
+                  healthy, 20&ndash;35% is manageable, and above 35% may
+                  indicate financial stress.
+                </p>
+              </details>
+              <details className="faq-item">
+                <summary>How accurate is this budget calculator?</summary>
+                <p>
+                  The calculator provides an accurate breakdown based on the
+                  numbers you enter. It uses the widely-accepted 50/30/20
+                  framework. For comprehensive financial planning, consider
+                  consulting a financial advisor.
+                </p>
+              </details>
+            </div>
+
             {/* CTA */}
             <div className="cta-section">
               <h3>Want to See Your Cash Flow 24 Months Ahead?</h3>

@@ -4,6 +4,12 @@ export const BLOG_CONFIG = {
   domain: 'thepayrollbrief.com',
   satelliteBlogId: 'thepayrollbrief',
   parentProduct: 'Payroll Beacon',
+
+  // Publisher / Organization (for JSON-LD)
+  publisher: 'BeaconOps',
+  publisherUrl: 'https://beaconops.com',
+  publisherLogo: 'https://beaconops.com/logo.png',
+  language: 'en-US',
   accentColor: '#2563EB',
   accentColorLight: '#DBEAFE',
   logoEmoji: '📋',

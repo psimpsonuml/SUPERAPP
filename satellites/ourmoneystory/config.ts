@@ -4,6 +4,12 @@ export const BLOG_CONFIG = {
   domain: 'ourmoneystory.com',
   satelliteBlogId: 'ourmoneystory',
   parentProduct: 'Budgeting Beacon',
+
+  // Publisher / Organization (for JSON-LD)
+  publisher: 'BeaconOps',
+  publisherUrl: 'https://beaconops.com',
+  publisherLogo: 'https://beaconops.com/logo.png',
+  language: 'en-US',
   accentColor: '#E11D48',
   accentColorLight: '#FFE4E6',
   logoEmoji: '❤️',

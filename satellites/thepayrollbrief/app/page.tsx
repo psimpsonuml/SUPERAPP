@@ -1,6 +1,7 @@
 import { BLOG_CONFIG } from '../config';
 import { fetchPosts, fetchCategories } from '../lib/supabase';
 import Link from 'next/link';
+import JsonLd from './components/JsonLd';
 
 export const revalidate = 300; // ISR: revalidate every 5 minutes
 
@@ -24,9 +25,54 @@ export default async function HomePage({
   ]);
 
   const totalPages = Math.ceil(total / limit);
+  const siteUrl = `https://${BLOG_CONFIG.domain}`;
+
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: siteUrl,
+      },
+      ...(searchParams.category ? [{
+        '@type': 'ListItem',
+        position: 2,
+        name: searchParams.category,
+        item: `${siteUrl}/?category=${encodeURIComponent(searchParams.category)}`,
+      }] : []),
+    ],
+  };
+
+  const collectionSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: searchParams.category ? `${searchParams.category} — ${BLOG_CONFIG.name}` : BLOG_CONFIG.name,
+    description: BLOG_CONFIG.tagline,
+    url: siteUrl,
+    isPartOf: {
+      '@type': 'WebSite',
+      name: BLOG_CONFIG.name,
+      url: siteUrl,
+    },
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: total,
+      itemListElement: posts.map((post, i) => ({
+        '@type': 'ListItem',
+        position: offset + i + 1,
+        url: `${siteUrl}/posts/${post.slug}`,
+        name: post.title,
+      })),
+    },
+  };
 
   return (
     <>
+      <JsonLd data={[breadcrumbSchema, collectionSchema]} />
+
       <div className="hero">
         <h1>{BLOG_CONFIG.name}</h1>
         <p>{BLOG_CONFIG.tagline}</p>

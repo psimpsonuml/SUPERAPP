@@ -346,6 +346,52 @@ export default function Home() {
         </section>
       )}
 
+      {/* FAQ */}
+      <section className="faq-section">
+        <h2>Frequently Asked Questions</h2>
+        <details>
+          <summary>What is a payroll compliance check?</summary>
+          <p>
+            A payroll compliance check verifies that your business meets all
+            federal and state payroll requirements, including tax withholding
+            rates, minimum wage laws, pay frequency rules, and overtime
+            regulations.
+          </p>
+        </details>
+        <details>
+          <summary>Is this payroll compliance tool free?</summary>
+          <p>
+            Yes, our multi-state payroll compliance checker is completely free.
+            Check compliance requirements for all 50 US states instantly.
+          </p>
+        </details>
+        <details>
+          <summary>What does a state payroll compliance report include?</summary>
+          <p>
+            Each state report covers state income tax rates, minimum wage, pay
+            frequency requirements, overtime rules, new hire reporting deadlines,
+            and key compliance notes specific to that state.
+          </p>
+        </details>
+        <details>
+          <summary>How often do payroll compliance requirements change?</summary>
+          <p>
+            Payroll regulations can change annually or even mid-year. State
+            minimum wages, tax rates, and reporting requirements are updated
+            regularly. We keep our data current to reflect the latest
+            requirements.
+          </p>
+        </details>
+        <details>
+          <summary>Do I need a payroll compliance check for each state?</summary>
+          <p>
+            Yes, if you have employees in multiple states, each state has its own
+            payroll tax rates, minimum wage, overtime rules, and reporting
+            requirements. Our tool lets you check all 50 states.
+          </p>
+        </details>
+      </section>
+
       {/* CTA */}
       <section className="cta-section">
         <h2>Need Ongoing Compliance Monitoring?</h2>

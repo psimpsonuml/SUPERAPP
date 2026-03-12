@@ -10,6 +10,12 @@ export const BLOG_CONFIG = {
   satelliteBlogId: 'thepayrollbrief',
   parentProduct: 'Payroll Beacon',
 
+  // Publisher / Organization (for JSON-LD)
+  publisher: 'BeaconOps',
+  publisherUrl: 'https://beaconops.com',
+  publisherLogo: 'https://beaconops.com/logo.png',
+  language: 'en-US',
+
   // Design
   accentColor: '#2563EB',
   accentColorLight: '#DBEAFE',

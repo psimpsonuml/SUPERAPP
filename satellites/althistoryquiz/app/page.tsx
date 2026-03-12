@@ -114,6 +114,51 @@ export default function Home() {
         <button className="start-button" onClick={startQuiz}>
           Start Quiz
         </button>
+
+        <section className="faq-section">
+          <h2 className="faq-heading">Frequently Asked Questions</h2>
+          <details className="faq-item">
+            <summary>What is the Alt History Quiz?</summary>
+            <p>
+              The Alt History Quiz is a free personality quiz that presents you with
+              alternate history scenarios — &apos;what if&apos; questions about pivotal moments
+              in history — and determines your history maker personality type based on
+              your choices.
+            </p>
+          </details>
+          <details className="faq-item">
+            <summary>What are the personality types?</summary>
+            <p>
+              There are four personality types: Timeline Divergent (embraces radical
+              change), History Preserver (values stability and continuity), Chaos Agent
+              (thrives on unpredictable outcomes), and Future Architect (focuses on
+              long-term technological and social progress).
+            </p>
+          </details>
+          <details className="faq-item">
+            <summary>How many questions are in the quiz?</summary>
+            <p>
+              Each quiz session presents 12 questions randomly selected from a pool of
+              over 50 alternate history scenarios, so you get a different experience
+              each time you take it.
+            </p>
+          </details>
+          <details className="faq-item">
+            <summary>Is the Alt History Quiz free?</summary>
+            <p>
+              Yes, the quiz is completely free to take. You can retake it as many times
+              as you like to explore different scenarios and potentially get a different
+              personality result.
+            </p>
+          </details>
+          <details className="faq-item">
+            <summary>Can I share my quiz results?</summary>
+            <p>
+              Yes! After completing the quiz, you can copy your results to share with
+              friends on social media or messaging apps.
+            </p>
+          </details>
+        </section>
       </div>
     );
   }
