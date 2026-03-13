@@ -1,4 +1,15 @@
-const { Queue, Worker, QueueScheduler } = require('bullmq');
+// ══════════════════════════════════════════════════════════════════
+// BeaconOps Orchestrator — BullMQ + Upstash Redis
+//
+// Runs as a long-lived worker process on Railway.
+// Schedules all agents via BullMQ repeatable jobs with cron patterns.
+//
+// Usage:
+//   npm run orchestrator          — start scheduler (all agents)
+//   npm run agent seo-aeo-writer  — run a single agent once
+// ══════════════════════════════════════════════════════════════════
+
+const { Queue, Worker } = require('bullmq');
 const IORedis = require('ioredis');
 const config = require('../config');
 const schedule = require('../config/schedule');
@@ -10,7 +21,20 @@ const logger = require('../shared/logger');
 class Orchestrator {
   constructor(accountId) {
     this.accountId = accountId;
-    this.connection = new IORedis(config.redis.url, { maxRetriesPerRequest: null });
+
+    // Build Redis connection — supports both Upstash (TLS) and local Redis
+    const redisUrl = config.redis.url;
+    const redisOpts = {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    };
+
+    // Upstash Redis URLs start with rediss:// (TLS) — enable TLS options
+    if (redisUrl.startsWith('rediss://')) {
+      redisOpts.tls = { rejectUnauthorized: false };
+    }
+
+    this.connection = new IORedis(redisUrl, redisOpts);
     this.queues = {};
     this.workers = {};
     this.analytics = new AnalyticsPipeline(accountId);
@@ -18,7 +42,19 @@ class Orchestrator {
   }
 
   async start() {
-    logger.info('Starting BeaconOps Orchestrator', { accountId: this.accountId });
+    logger.info('Starting BeaconOps Orchestrator', {
+      accountId: this.accountId,
+      redisUrl: config.redis.url.replace(/\/\/.*@/, '//***@'), // mask credentials in logs
+    });
+
+    // Verify Redis connection
+    try {
+      await this.connection.ping();
+      logger.info('Redis connection verified');
+    } catch (err) {
+      logger.error(`Redis connection failed: ${err.message}. Orchestrator cannot start without Redis.`);
+      throw err;
+    }
 
     // Create task queue
     this.taskQueue = new Queue('beaconops-tasks', {
@@ -59,12 +95,30 @@ class Orchestrator {
       }
     });
 
+    // Clean up any stale repeatable jobs from previous runs, then reschedule
+    await this.cleanStaleJobs();
+
     // Schedule all agents
     await this.scheduleAgents();
 
     logger.info('BeaconOps Orchestrator started successfully', {
       scheduledAgents: Object.keys(registry).length,
+      timezone: config.agents.timezone,
     });
+  }
+
+  async cleanStaleJobs() {
+    try {
+      const repeatableJobs = await this.taskQueue.getRepeatableJobs();
+      for (const job of repeatableJobs) {
+        await this.taskQueue.removeRepeatableByKey(job.key);
+      }
+      if (repeatableJobs.length > 0) {
+        logger.info(`Cleaned ${repeatableJobs.length} stale repeatable jobs`);
+      }
+    } catch (err) {
+      logger.warn(`Failed to clean stale jobs: ${err.message}`);
+    }
   }
 
   async scheduleAgents() {
@@ -85,6 +139,7 @@ class Orchestrator {
       await this.taskQueue.add(agent.agentId, {
         agentId: agent.agentId,
         accountId: this.accountId,
+        options: agent.options || {},
       }, {
         repeat: { pattern: agent.cron, tz: config.agents.timezone },
         jobId: `${agent.agentId}-daily`,
@@ -97,6 +152,7 @@ class Orchestrator {
       await this.taskQueue.add(agent.agentId, {
         agentId: agent.agentId,
         accountId: this.accountId,
+        options: agent.options || {},
       }, {
         repeat: { pattern: agent.cron, tz: config.agents.timezone },
         jobId: `${agent.agentId}-weekly`,
@@ -218,7 +274,6 @@ class Orchestrator {
     // Store report
     await this.analytics.recordEngagement('daily-report', { report });
 
-    // TODO: Send report via email and push to dashboard
     logger.info('Daily report compiled', {
       contentProduced: report.content.total,
       agentRuns: report.agentRuns.total,
@@ -249,7 +304,6 @@ class Orchestrator {
         .order('created_at', { ascending: false })
         .limit(1);
 
-      // Yesterday's open rate
       const yesterdayStart = new Date(todayStart);
       yesterdayStart.setDate(yesterdayStart.getDate() - 1);
       const { data: yesterdayEdition } = await supabase
@@ -287,7 +341,6 @@ class Orchestrator {
 
       const supabase = getSupabase();
 
-      // Get all active (not completed/passed) intelligence entries
       const { data: active } = await supabase
         .from('intelligence_log')
         .select('*')
@@ -300,7 +353,6 @@ class Orchestrator {
         return { totalActive: 0, topOpportunities: [], byCategory: {} };
       }
 
-      // ROI-rank top 10
       const scored = active.map(entry => {
         const reach = entry.potential_reach || 1;
         const relevance = entry.relevance_score || 5;
@@ -320,18 +372,13 @@ class Orchestrator {
         status: e.status,
       }));
 
-      // By category counts
       const byCategory = {};
       for (const entry of active) {
         const cat = entry.category || 'unknown';
         byCategory[cat] = (byCategory[cat] || 0) + 1;
       }
 
-      return {
-        totalActive: active.length,
-        topOpportunities,
-        byCategory,
-      };
+      return { totalActive: active.length, topOpportunities, byCategory };
     } catch (err) {
       logger.warn(`Intelligence briefing compilation failed: ${err.message}`);
       return { totalActive: 0, topOpportunities: [], byCategory: {} };
@@ -371,12 +418,7 @@ class Orchestrator {
         totalDuration += v.duration_sec || 0;
       }
 
-      return {
-        todayCount: videos.length,
-        totalDurationSec: totalDuration,
-        byProduct,
-        byFormat,
-      };
+      return { todayCount: videos.length, totalDurationSec: totalDuration, byProduct, byFormat };
     } catch (err) {
       logger.warn(`Video production stats compilation failed: ${err.message}`);
       return { todayCount: 0, byProduct: {}, byFormat: {} };
@@ -392,7 +434,6 @@ class Orchestrator {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
 
-      // Today's new recommendations
       const { data: todayRecs } = await supabase
         .from('product_intelligence')
         .select('product, rec_type, title, impact_estimate')
@@ -402,20 +443,17 @@ class Orchestrator {
 
       const newRecs = todayRecs || [];
 
-      // By product
       const byProduct = {};
       for (const r of newRecs) {
         byProduct[r.product] = (byProduct[r.product] || 0) + 1;
       }
 
-      // Top 3 highest-impact
       const impactOrder = { high: 3, medium: 2, low: 1 };
       const topRecommendations = [...newRecs]
         .sort((a, b) => (impactOrder[b.impact_estimate] || 0) - (impactOrder[a.impact_estimate] || 0))
         .slice(0, 3)
         .map(r => ({ product: r.product, title: r.title, impact: r.impact_estimate }));
 
-      // Snoozed items expiring this week
       const weekFromNow = new Date();
       weekFromNow.setDate(weekFromNow.getDate() + 7);
       const { data: expiring } = await supabase
@@ -426,7 +464,6 @@ class Orchestrator {
         .lte('snoozed_until', weekFromNow.toISOString())
         .gte('snoozed_until', new Date().toISOString());
 
-      // Pricing alerts
       const pricingAlerts = newRecs.filter(r => r.rec_type === 'pricing').length;
 
       return {
@@ -449,7 +486,6 @@ class Orchestrator {
 
       const supabase = getSupabase();
 
-      // Last night's result
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       const { data: lastNight } = await supabase
@@ -462,7 +498,6 @@ class Orchestrator {
 
       const ln = lastNight?.[0] || null;
 
-      // 7-day trend
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       const { data: weekResults } = await supabase
@@ -508,7 +543,6 @@ class Orchestrator {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
 
-      // This week's scenarios
       const { data: thisWeek } = await supabase
         .from('cs_scenario_library')
         .select('title, era, region, difficulty, approval_status, injected, created_at')
@@ -518,13 +552,11 @@ class Orchestrator {
 
       const scenarios = thisWeek || [];
 
-      // Total in library
       const { data: total } = await supabase
         .from('cs_scenario_library')
         .select('id', { count: 'exact' })
         .eq('account_id', this.accountId);
 
-      // Variety check
       const eras = [...new Set(scenarios.map(s => s.era))];
       const regions = [...new Set(scenarios.map(s => s.region))];
       const diffs = [...new Set(scenarios.map(s => s.difficulty))];
@@ -564,7 +596,6 @@ class Orchestrator {
 
       const supabase = getSupabase();
 
-      // Satellite blogs
       const { data: blogs } = await supabase
         .from('satellite_blogs')
         .select('id, name, domain, parent_product, posts_generated, backlinks_created, status')
@@ -583,7 +614,6 @@ class Orchestrator {
       const satPosts = todayPosts || [];
       const activeBlogs = blogs || [];
 
-      // Vertical tools
       const { data: tools } = await supabase
         .from('vertical_tools')
         .select('id, name, domain, parent_product, visits, cta_clicks, conversions, discount_codes_generated, status')
@@ -675,6 +705,55 @@ class Orchestrator {
     if (this.taskQueue) await this.taskQueue.close();
     if (this.connection) await this.connection.quit();
     logger.info('Orchestrator stopped');
+  }
+}
+
+// ── CLI Entry Point ─────────────────────────────────────────────
+// Run with: npm run orchestrator (start scheduler)
+//       or: npm run agent -- seo-aeo-writer (single agent run)
+if (require.main === module) {
+  require('dotenv').config();
+
+  const accountId = process.env.DEFAULT_ACCOUNT_ID || '00000000-0000-0000-0000-000000000001';
+  const orchestrator = new Orchestrator(accountId);
+
+  // Support running a single agent: npm run agent -- seo-aeo-writer
+  const runIndex = process.argv.indexOf('--run');
+  if (runIndex !== -1 && process.argv[runIndex + 1]) {
+    const agentId = process.argv[runIndex + 1];
+    logger.info(`Single agent run: ${agentId}`);
+
+    // Direct execution (no queue) for one-off runs
+    const agent = createAgent(agentId, accountId);
+    agent.execute()
+      .then(result => {
+        logger.info(`Agent ${agentId} completed`, result);
+        process.exit(0);
+      })
+      .catch(err => {
+        logger.error(`Agent ${agentId} failed: ${err.message}`);
+        process.exit(1);
+      });
+  } else {
+    // Start the full orchestrator with BullMQ scheduling
+    orchestrator.start()
+      .then(() => {
+        logger.info('Orchestrator is running. Press Ctrl+C to stop.');
+      })
+      .catch(err => {
+        logger.error(`Failed to start orchestrator: ${err.message}`);
+        process.exit(1);
+      });
+
+    // Graceful shutdown
+    const shutdown = async () => {
+      logger.info('Shutting down...');
+      await orchestrator.stop();
+      process.exit(0);
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
   }
 }
 

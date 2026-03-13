@@ -44,6 +44,8 @@ const featureVisibilityRoutes = require('./dashboard/routes/feature-visibility')
 const legalRoutes = require('./dashboard/routes/legal');
 const companionRoutes = require('./dashboard/routes/companion');
 const faqRoutes = require('./dashboard/routes/faq');
+const cronRoutes = require('./dashboard/routes/cron');
+const dailyReportCronRoute = require('./dashboard/routes/daily-report');
 
 const app = express();
 
@@ -79,6 +81,11 @@ app.get('/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     environment: config.env,
     vercel: !!process.env.VERCEL,
+    scheduler: {
+      mode: 'railway-bullmq',
+      upstashConfigured: !!(process.env.UPSTASH_REDIS_URL),
+      cronFallback: !!process.env.CRON_SECRET,
+    },
     dependencies: {
       supabase: isSupabaseConfigured() ? 'connected' : 'not configured',
       supabaseEnv: {
@@ -159,6 +166,10 @@ app.use('/api/features', requireSupabase, featureVisibilityRoutes); // Feature V
 app.use('/api/legal', requireSupabase, legalRoutes); // Legal: privacy policy, terms of service
 app.use('/api/companion', requireSupabase, companionRoutes); // Personal Companion: AI coach/buddy/mentor
 app.use('/api/faq', faqRoutes); // FAQ: auto-generated feature documentation
+
+// Vercel Cron endpoints — secured by CRON_SECRET, no Supabase guard (agents handle own DB)
+app.use('/api/cron/daily-report', dailyReportCronRoute); // Daily report (must be before /api/cron/:agentId)
+app.use('/api/cron', cronRoutes); // Agent cron triggers
 
 // API info
 app.get('/api', (_req, res) => {

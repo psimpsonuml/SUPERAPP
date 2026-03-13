@@ -16,5 +16,71 @@
     { "src": "/auth/(.*)", "dest": "src/server.js" },
     { "src": "/billing/(.*)", "dest": "src/server.js" },
     { "src": "/(.*)", "dest": "package.json" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/infrastructure-monitor",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/inbox-monitor",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/qa-playtest",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/pain-point-hunter",
+      "schedule": "30 5 * * *"
+    },
+    {
+      "path": "/api/cron/community-scout",
+      "schedule": "45 5 * * *"
+    },
+    {
+      "path": "/api/cron/builder-community",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/seo-aeo-writer",
+      "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/cron/substack-publisher",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/social-distributor",
+      "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/cron/video-producer",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/outreach-prospector",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/batch/run?agents=intelligence-analyst,product-intelligence",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/ad-creative",
+      "schedule": "30 9 * * 3"
+    },
+    {
+      "path": "/api/cron/batch/run?agents=community-scout,community-strategist",
+      "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/content-library-manager",
+      "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/cron/daily-report",
+      "schedule": "0 10 * * *"
+    }
   ]
 }
