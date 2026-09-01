@@ -1,6 +1,7 @@
 const BaseAgent = require('./base-agent');
 const products = require('../config/products');
 const config = require('../config');
+const { SIGNAL_COLUMNS, withSignalText } = require('../shared/pain-points');
 
 // ── Pricing comparisons per product ───────────────────────
 const PRICING_BENCHMARKS = {
@@ -128,7 +129,7 @@ class ProductIntelligenceAgent extends BaseAgent {
     // 1. Pain Point Hunter signals
     const { data: painPoints } = await this.supabase
       .from('pain_points')
-      .select('signal_text, category, source, score, date_found')
+      .select(SIGNAL_COLUMNS)
       .eq('account_id', this.accountId)
       .or(`product.eq.${productId},product_relevance.eq.${productId}`)
       .gte('date_found', monthAgo)
@@ -186,7 +187,7 @@ class ProductIntelligenceAgent extends BaseAgent {
       .limit(30);
 
     return {
-      painPoints: painPoints || [],
+      painPoints: withSignalText(painPoints),
       communityPosts: communityPosts || [],
       builderIntel: (builderIntel || []).map(e => e.event_data),
       supportEmails: (supportEmails || []).map(e => ({
@@ -282,7 +283,7 @@ Requirements:
     if (signals.painPoints.length > 0) {
       parts.push('PAIN POINTS (user complaints/requests):');
       for (const pp of signals.painPoints.slice(0, 10)) {
-        parts.push(`- [score: ${pp.score}] ${pp.signal_text} (source: ${pp.source})`);
+        parts.push(`- [score: ${pp.score}] ${pp.signalText} (source: ${pp.source})`);
       }
     }
 
@@ -336,12 +337,12 @@ Requirements:
     for (const pp of signals.painPoints.slice(0, 2)) {
       recs.push({
         type: 'add',
-        title: `Address: ${pp.signal_text.slice(0, 70)}`,
+        title: `Address: ${pp.signalText.slice(0, 70)}`,
         description: `Users are requesting this based on ${pp.source} signals.`,
         rationale: `Pain point score ${pp.score}. Found on ${pp.date_found}.`,
         effort: 'medium',
         impact: pp.score > 7 ? 'high' : 'medium',
-        sourceSignals: [`Pain Point Hunter: ${pp.signal_text.slice(0, 100)}`],
+        sourceSignals: [`Pain Point Hunter: ${pp.signalText.slice(0, 100)}`],
       });
     }
 

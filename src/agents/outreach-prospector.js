@@ -2,6 +2,7 @@ const BaseAgent = require('./base-agent');
 const Anthropic = require('@anthropic-ai/sdk');
 const https = require('https');
 const config = require('../config');
+const { searchOrEmpty } = require('../shared/search');
 
 // ── Product-specific prospect search config ──────────────────
 
@@ -95,7 +96,7 @@ class OutreachProspectorAgent extends BaseAgent {
       cycle: 'daily',
       defaultTier: 2,
     });
-    this.anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
+    this.anthropic = new Anthropic({ apiKey: config.llm.anthropic.apiKey });
   }
 
   async run() {
@@ -850,55 +851,12 @@ Respond with JSON: {"subject": "<email subject>", "body": "<email body>"}`;
   //  WEB SEARCH & HTTP HELPERS
   // ════════════════════════════════════════════════════════════
 
+  // Real web search via the shared provider. This previously
+  // regex-scraped html.duckduckgo.com as its primary path whenever
+  // Google CSE keys were absent — brittle, and silently returned
+  // nothing when the markup changed.
   async webSearch(query) {
-    // Try Google Custom Search first, fall back to DuckDuckGo
-    const googleKey = process.env.GOOGLE_SEARCH_API_KEY;
-    const googleCx = process.env.GOOGLE_SEARCH_CX;
-
-    if (googleKey && googleCx) {
-      try {
-        const url = `https://www.googleapis.com/customsearch/v1?key=${googleKey}&cx=${googleCx}&q=${encodeURIComponent(query)}&num=10`;
-        const data = await this.httpGet(url);
-        return (data.items || []).map(item => ({
-          title: item.title,
-          url: item.link,
-          snippet: item.snippet,
-        }));
-      } catch (err) {
-        this.logger.debug(`Google search fallback: ${err.message}`, { agentId: this.agentId });
-      }
-    }
-
-    // DuckDuckGo HTML search fallback
-    try {
-      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-      const html = await this.httpGetText(ddgUrl, {
-        'User-Agent': 'Mozilla/5.0 (compatible; BeaconOps/1.0)',
-      });
-
-      const results = [];
-      const linkRegex = /<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
-      const snippetRegex = /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-      let linkMatch, snippetMatch;
-      while ((linkMatch = linkRegex.exec(html)) && results.length < 10) {
-        snippetMatch = snippetRegex.exec(html);
-        let href = linkMatch[1];
-        // DuckDuckGo wraps URLs — extract the actual URL
-        const uddg = href.match(/uddg=([^&]+)/);
-        if (uddg) href = decodeURIComponent(uddg[1]);
-
-        results.push({
-          title: linkMatch[2].replace(/<[^>]+>/g, '').trim(),
-          url: href,
-          snippet: snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : '',
-        });
-      }
-
-      return results;
-    } catch (err) {
-      this.logger.debug(`DuckDuckGo search error: ${err.message}`, { agentId: this.agentId });
-      return [];
-    }
+    return searchOrEmpty(query, { limit: 10 }, this.logger);
   }
 
   extractNameFromResult(result) {

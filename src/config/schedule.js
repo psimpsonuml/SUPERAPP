@@ -27,7 +27,6 @@ const schedule = {
     { agentId: 'video-producer', cron: '0 8 * * *', description: 'Daily video production pipeline' },
     { agentId: 'outreach-prospector', cron: '30 8 * * *', description: 'Lead search + email drafting' },
     { agentId: 'product-intelligence', cron: '0 9 * * *', description: 'Daily feature/pricing analysis' },
-    { agentId: 'ad-creative', cron: '30 9 * * 3', description: 'Generate ad creatives (Wednesday)' },
   ],
 
   // Frequency set by INBOX_MONITOR_FREQUENCY (weekly | daily | hourly)
@@ -45,6 +44,13 @@ const schedule = {
     { agentId: 'intelligence-analyst', cron: '0 9 * * 2', description: 'Weekly research briefing (Tuesday)' },
     { agentId: 'content-library-manager', cron: '0 8 * * 1', description: 'Weekly scenario generation (Monday)' },
     { agentId: 'wrestling-scraper', cron: '0 5 * * 2', description: 'Weekly wrestling results scrape + stats (Tuesday)' },
+  ],
+
+  // Disabled per Growth OS spec §21 — paid-ad creative returns when there is
+  // real ad spend and performance data to learn from. Agent code is retained
+  // and still manually triggerable via /api/agents/ad-creative/trigger.
+  disabled: [
+    { agentId: 'ad-creative', cron: '30 9 * * 3', reason: 'No active ad spend' },
   ],
 
   monthly: [

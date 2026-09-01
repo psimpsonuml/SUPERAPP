@@ -1,6 +1,7 @@
 const https = require('https');
 const BaseAgent = require('./base-agent');
 const products = require('../config/products');
+const { searchOrEmpty } = require('../shared/search');
 
 // ── Keyword sets per product ───────────────────────────────
 const PRODUCT_KEYWORDS = {
@@ -244,40 +245,14 @@ class CommunityScoutAgent extends BaseAgent {
     return this.scoreAndRank(deduped, productId);
   }
 
-  // ── Google custom search (uses Programmable Search Engine) ──
+  // ── Web search (non-Reddit platform discovery) ─────────────
+  // Previously fell back to the DuckDuckGo *Instant Answer* API, which
+  // returns disambiguation topics rather than search results — so
+  // Facebook/Discord/LinkedIn/Slack discovery silently found nothing
+  // whenever Google CSE keys were absent. Now goes through the shared
+  // provider, which returns [] and logs when unconfigured.
   async googleSearch(query) {
-    // Use Google Custom Search API if available, else fallback to DuckDuckGo HTML
-    const googleKey = process.env.GOOGLE_SEARCH_API_KEY;
-    const googleCx = process.env.GOOGLE_SEARCH_CX;
-
-    if (googleKey && googleCx) {
-      const url = `https://www.googleapis.com/customsearch/v1?key=${googleKey}&cx=${googleCx}&q=${encodeURIComponent(query)}&num=10`;
-      const data = await this.fetchJson(url);
-      return (data?.items || []).map(item => ({
-        title: item.title,
-        url: item.link,
-        snippet: item.snippet,
-      }));
-    }
-
-    // Fallback: DuckDuckGo lite (HTML scraping avoided — use API endpoint)
-    try {
-      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&no_redirect=1`;
-      const data = await this.fetchJson(url);
-      const results = [];
-      for (const topic of (data?.RelatedTopics || [])) {
-        if (topic.FirstURL) {
-          results.push({
-            title: topic.Text?.slice(0, 100) || '',
-            url: topic.FirstURL,
-            snippet: topic.Text || '',
-          });
-        }
-      }
-      return results;
-    } catch (e) {
-      return [];
-    }
+    return searchOrEmpty(query, { limit: 10 }, this.logger);
   }
 
   // ── Scoring ────────────────────────────────────────────

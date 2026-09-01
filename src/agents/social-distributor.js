@@ -186,9 +186,11 @@ class SocialDistributorAgent extends BaseAgent {
         results.platforms[platform] = (results.platforms[platform] || 0) + 1;
 
         // Mark calendar entry as processing
+        // content_calendar.status has no 'processing' value in its CHECK
+        // constraint — the row stays 'scheduled' until it actually posts.
         await this.supabase
           .from('content_calendar')
-          .update({ status: 'processing' })
+          .update({ updated_at: new Date().toISOString() })
           .eq('id', entry.id);
 
       } catch (err) {
@@ -629,7 +631,7 @@ Respond with ONLY valid JSON (no markdown, no code fences):
       if (postLog.calendar_entry_id) {
         await this.supabase
           .from('content_calendar')
-          .update({ status: 'published' })
+          .update({ status: 'posted' })
           .eq('id', postLog.calendar_entry_id);
       }
 
