@@ -16,6 +16,7 @@ const inboxSchedule = INBOX_FREQUENCIES[inboxFrequency] || INBOX_FREQUENCIES.wee
 const schedule = {
   continuous: [
     { agentId: 'infrastructure-monitor', interval: '*/1 * * * *' },
+    { agentId: 'publish-dispatcher', interval: '*/10 * * * *' },
   ],
 
   daily: [

@@ -16,6 +16,7 @@ const ProductIntelligenceAgent = require('./product-intelligence');
 const UserLifecycleAgent = require('./user-lifecycle');
 const InfrastructureMonitorAgent = require('./infrastructure-monitor');
 const WrestlingScraperAgent = require('./wrestling-scraper');
+const PublishDispatcherAgent = require('./publish-dispatcher');
 
 const registry = {
   'inbox-monitor': {
@@ -134,6 +135,14 @@ const registry = {
     Agent: InfrastructureMonitorAgent,
     name: 'Infrastructure Monitor',
     domain: 'Uptime, webhooks, API health',
+    cycle: 'continuous',
+    essential: true,
+    criticalOnFailure: true,
+  },
+  'publish-dispatcher': {
+    Agent: PublishDispatcherAgent,
+    name: 'Publish Dispatcher',
+    domain: 'Drains approved items and scheduled posts',
     cycle: 'continuous',
     essential: true,
     criticalOnFailure: true,

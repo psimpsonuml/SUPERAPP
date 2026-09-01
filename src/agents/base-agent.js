@@ -68,7 +68,7 @@ class BaseAgent {
 
   // Agents that run even in reduced ops mode
   isEssentialAgent() {
-    const essentialAgents = ['inbox-monitor', 'user-lifecycle', 'infrastructure-monitor'];
+    const essentialAgents = ['inbox-monitor', 'user-lifecycle', 'infrastructure-monitor', 'publish-dispatcher'];
     return essentialAgents.includes(this.agentId);
   }
 

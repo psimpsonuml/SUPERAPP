@@ -39,6 +39,7 @@ const bookPublishingRoutes = require('./dashboard/routes/book-publishing');
 const featureVisibilityRoutes = require('./dashboard/routes/feature-visibility');
 const legalRoutes = require('./dashboard/routes/legal');
 const faqRoutes = require('./dashboard/routes/faq');
+const growthRoutes = require('./dashboard/routes/growth');
 const cronRoutes = require('./dashboard/routes/cron');
 const dailyReportCronRoute = require('./dashboard/routes/daily-report');
 
@@ -95,6 +96,9 @@ app.get('/health', (_req, res) => {
 // Parse JSON for all routes except Stripe webhook (needs raw body)
 app.use('/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
+
+// Public growth endpoints (unsubscribe) — must precede the /api account guard
+app.use('/api/growth', growthRoutes.publicRouter);
 
 // Account context middleware — sets accountId for multi-tenant isolation
 // In production, this would extract from JWT/session; for personal use, uses default account
@@ -158,6 +162,7 @@ app.use('/api/legal', requireSupabase, legalRoutes); // Legal: privacy policy, t
 app.use('/api/faq', faqRoutes); // FAQ: auto-generated feature documentation
 
 // Vercel Cron endpoints — secured by CRON_SECRET, no Supabase guard (agents handle own DB)
+app.use('/api/growth', growthRoutes); // Growth OS: dispatch, suppressions, mailboxes
 app.use('/api/cron/daily-report', dailyReportCronRoute); // Daily report (must be before /api/cron/:agentId)
 app.use('/api/cron', cronRoutes); // Agent cron triggers
 

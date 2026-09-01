@@ -69,9 +69,41 @@ class ApprovalQueueService {
         accountId: this.accountId,
         queueItemId: data.id,
       });
+
+      // Stamp reviewed_at so auto-approved items appear in getStats()
+      await supabase
+        .from('approval_queue')
+        .update({ reviewed_at: new Date().toISOString() })
+        .eq('id', data.id);
+
+      // Auto-approval must actually do the thing, not just set a status.
+      const dispatchResult = await this.dispatch({ ...record, id: data.id });
+      return {
+        id: data.id,
+        status: data.status,
+        autoApproved: true,
+        dispatch: dispatchResult,
+      };
     }
 
-    return { id: data.id, status: data.status, autoApproved: autoApprove };
+    return { id: data.id, status: data.status, autoApproved: false };
+  }
+
+  /**
+   * Hand an approved item to the dispatcher.
+   * Never throws — a dispatch failure must not roll back the approval.
+   */
+  async dispatch(item) {
+    try {
+      const { dispatch } = require('./dispatcher');
+      return await dispatch(item, this.accountId);
+    } catch (err) {
+      logger.error(`Dispatcher invocation failed: ${err.message}`, {
+        accountId: this.accountId,
+        approvalItemId: item?.id,
+      });
+      return { status: 'failed', error: err.message };
+    }
   }
 
   async approve(itemId, reviewerNotes) {
@@ -90,7 +122,10 @@ class ApprovalQueueService {
       .single();
 
     if (error) throw new Error(`Failed to approve item: ${error.message}`);
-    return data;
+
+    // Approval is only half the job — hand it to the dispatcher.
+    const dispatchResult = await this.dispatch(data);
+    return { ...data, dispatch: dispatchResult };
   }
 
   async reject(itemId, reviewerNotes) {
