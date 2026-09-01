@@ -7,6 +7,7 @@ const GrowthContentService = require('../../shared/growth/content');
 const GrowthProspectsService = require('../../shared/growth/prospects');
 const GrowthCostService = require('../../shared/growth/cost');
 const GrowthAttributionService = require('../../shared/growth/attribution');
+const ContentGenerator = require('../../shared/growth/generator');
 const logger = require('../../shared/logger');
 
 const router = express.Router();
@@ -368,6 +369,163 @@ router.put('/prospects/:id/status', async (req, res) => {
     res.json({ prospect: await service.setStatus(req.params.id, status, { event }) });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+
+// ── CONTENT ───────────────────────────────────────────────
+
+// GET /api/growth/content
+router.get('/content', async (req, res) => {
+  try {
+    const service = new GrowthContentService(req.accountId);
+    res.json({
+      content: await service.listContent({
+        status: req.query.status ? req.query.status.split(',') : undefined,
+        platform: req.query.platform,
+        sourceId: req.query.source_id,
+        from: req.query.from,
+        to: req.query.to,
+        limit: Math.min(parseInt(req.query.limit, 10) || 50, 200),
+        offset: parseInt(req.query.offset, 10) || 0,
+      }),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/content/review — the approval inbox
+router.get('/content/review', async (req, res) => {
+  try {
+    const service = new GrowthContentService(req.accountId);
+    const items = await service.listAwaitingApproval({ limit: 100 });
+    res.json({
+      content: items,
+      count: items.length,
+      manual_posting_required: items.filter(i => i.requires_manual_posting).length,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/content/platforms — what the generator supports
+router.get('/content/platforms', (_req, res) => {
+  res.json({
+    platforms: ContentGenerator.SUPPORTED_PLATFORMS,
+    specs: Object.fromEntries(
+      Object.entries(ContentGenerator.PLATFORM_SPECS).map(([k, v]) => [k, { label: v.label, model: v.model }])
+    ),
+  });
+});
+
+// GET /api/growth/content/:id
+router.get('/content/:id', async (req, res) => {
+  try {
+    const service = new GrowthContentService(req.accountId);
+    const content = await service.getContent(req.params.id);
+    if (!content) return res.status(404).json({ error: 'Content not found' });
+    res.json({ content, events: await service.getEvents(req.params.id) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/growth/content/:id — human edit
+router.put('/content/:id', async (req, res) => {
+  try {
+    const service = new GrowthContentService(req.accountId);
+    const { title, body, scheduled_for } = req.body;
+    const patch = { edited_by_human: true };
+    if (title !== undefined) patch.title = title;
+    if (body !== undefined) patch.body = body;
+    if (scheduled_for !== undefined) patch.scheduled_for = scheduled_for;
+
+    res.json({
+      content: await service.updateContent(req.params.id, patch, {
+        event: 'edited', eventMetadata: { fields: Object.keys(patch) },
+      }),
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/content/:id/approve
+router.post('/content/:id/approve', async (req, res) => {
+  try {
+    const service = new GrowthContentService(req.accountId);
+    res.json({ content: await service.approve(req.params.id, { scheduledFor: req.body?.scheduled_for }) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/content/:id/reject
+router.post('/content/:id/reject', async (req, res) => {
+  try {
+    const service = new GrowthContentService(req.accountId);
+    res.json({ content: await service.reject(req.params.id, req.body?.reason) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/content/:id/mark-posted — manual platforms (spec §12)
+router.post('/content/:id/mark-posted', async (req, res) => {
+  try {
+    const service = new GrowthContentService(req.accountId);
+    res.json({ content: await service.markPublished(req.params.id, req.body?.published_url) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/generate — generate a package from one source
+router.post('/generate', async (req, res) => {
+  try {
+    const { source_id, platforms } = req.body;
+    if (!source_id) return res.status(400).json({ error: 'source_id is required' });
+
+    const contentService = new GrowthContentService(req.accountId);
+    const source = await contentService.getSource(source_id);
+    if (!source) return res.status(404).json({ error: 'Source not found' });
+
+    const costService = new GrowthCostService(req.accountId);
+    const generator = new ContentGenerator(req.accountId, { costService });
+
+    const recentContent = await contentService.listContent({
+      status: ['approved', 'scheduled', 'published'], limit: 12,
+    });
+
+    const targets = platforms && platforms.length > 0
+      ? platforms
+      : ['facebook', 'instagram', 'linkedin_company'];
+
+    const pkg = await generator.generatePackage({ source, platforms: targets, recentContent });
+
+    const stored = [];
+    for (const item of pkg.generated) {
+      const { title, body } = ContentGenerator.flatten(item.platform, item.content);
+      if (!body) continue;
+      const record = await contentService.createContent({
+        sourceId: source.id,
+        platform: item.platform,
+        contentType: item.platform === 'blog' ? 'article' : 'post',
+        title, body,
+        metadata: { raw: item.content },
+        status: 'needs_review',
+        requiresManualPosting: item.requiresManualPosting,
+        model: item.model,
+        promptVersion: 'v1',
+      });
+      stored.push(record);
+    }
+
+    res.json({ generated: stored, failed: pkg.failed, count: stored.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

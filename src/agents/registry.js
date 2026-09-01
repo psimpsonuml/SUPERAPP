@@ -17,6 +17,8 @@ const UserLifecycleAgent = require('./user-lifecycle');
 const InfrastructureMonitorAgent = require('./infrastructure-monitor');
 const WrestlingScraperAgent = require('./wrestling-scraper');
 const PublishDispatcherAgent = require('./publish-dispatcher');
+const GrowthContentResearchAgent = require('./growth-content-research');
+const GrowthContentRepurposerAgent = require('./growth-content-repurposer');
 
 const registry = {
   'inbox-monitor': {
@@ -146,6 +148,22 @@ const registry = {
     cycle: 'continuous',
     essential: true,
     criticalOnFailure: true,
+  },
+  'growth-content-research': {
+    Agent: GrowthContentResearchAgent,
+    name: 'Growth Content Research',
+    domain: 'Payroll Beacon topic discovery -> content sources',
+    cycle: 'weekly',
+    essential: false,
+    criticalOnFailure: false,
+  },
+  'growth-content-repurposer': {
+    Agent: GrowthContentRepurposerAgent,
+    name: 'Growth Content Repurposer',
+    domain: 'One source -> platform content package',
+    cycle: 'weekly',
+    essential: false,
+    criticalOnFailure: false,
   },
   'wrestling-scraper': {
     Agent: WrestlingScraperAgent,

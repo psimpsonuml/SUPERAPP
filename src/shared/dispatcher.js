@@ -57,6 +57,38 @@ const handlers = {
       return dispatchOutreachEmail({ item, accountId });
     },
   },
+
+  // Growth OS content. Publishing integrations arrive in Phase 10; until
+  // then approval advances the record to 'approved' so it reaches the
+  // calendar. Anything flagged requires_manual_posting stops here by
+  // design and waits for the human to post it.
+  growth_content: {
+    name: 'growth-content.approve',
+    async handle({ item, accountId }) {
+      const contentId = item.full_content?.growthContentId;
+      if (!contentId) return { ok: false, reason: 'missing_growth_content_id' };
+
+      const GrowthContentService = require('./growth/content');
+      const service = new GrowthContentService(accountId);
+
+      const existing = await service.getContent(contentId);
+      if (!existing) return { ok: false, reason: 'content_not_found' };
+
+      if (existing.requires_manual_posting) {
+        await service.approve(contentId);
+        return { ok: true, result: { contentId, manualPostingRequired: true } };
+      }
+
+      const updated = await service.approve(contentId, {
+        scheduledFor: item.full_content?.scheduledFor || null,
+      });
+
+      return {
+        ok: true,
+        result: { contentId, status: updated.status, platform: updated.platform },
+      };
+    },
+  },
 };
 
 async function dispatchOutreachEmail({ item, accountId }) {
@@ -82,11 +114,12 @@ async function dispatchOutreachEmail({ item, accountId }) {
 // Item types that intentionally have no automated action — they are
 // review-only artifacts. Logged as 'skipped', not 'no_handler'.
 const MANUAL_ONLY = new Set([
+  // Spec §12: personal LinkedIn is prepared, never posted automatically.
+  'linkedin_personal_post',
   'intelligence_briefing',
   'chronostates_scenario',
   'ad_creative',
   'video_concept',
-  'linkedin_personal_post',
   'manual_review',
 ]);
 
