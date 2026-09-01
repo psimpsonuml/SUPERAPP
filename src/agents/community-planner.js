@@ -1,6 +1,13 @@
+// ══════════════════════════════════════════════════════════════════
+// Community Planner
+//
+// Rule parsing + content-calendar generation. Formerly the standalone
+// "community-strategist" agent; now phase 2 of Community Scout.
+// Not a registered agent — instantiated by CommunityScoutAgent.
+// ══════════════════════════════════════════════════════════════════
+
 const https = require('https');
 const Anthropic = require('@anthropic-ai/sdk');
-const BaseAgent = require('./base-agent');
 const products = require('../config/products');
 
 const CLASSIFICATIONS = ['open_to_marketing', 'designated_threads_only', 'value_only', 'unclear'];
@@ -11,22 +18,17 @@ const DOW = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', '
 // Warmup period: 2 weeks of pure engagement before any content posting
 const WARMUP_ENGAGEMENTS = 14;
 
-class CommunityStrategistAgent extends BaseAgent {
-  static agentId = 'community-strategist';
-  static agentName = 'Community Strategist';
-
-  constructor(accountId) {
-    super(accountId, {
-      agentId: 'community-strategist',
-      agentName: 'Community Strategist',
-      cycle: 'weekly',
-      defaultTier: 2,
-    });
+class CommunityPlanner {
+  constructor({ accountId, supabase, logger }) {
+    this.accountId = accountId;
+    this.supabase = supabase;
+    this.logger = logger;
+    this.agentId = 'community-scout';
     this.anthropic = new Anthropic();
   }
 
-  // ── Main run ───────────────────────────────────────────
-  async run() {
+  // ── Main planning pass ─────────────────────────────────
+  async plan() {
     const results = {
       communitiesAnalyzed: 0,
       calendarEntriesCreated: 0,
@@ -141,7 +143,7 @@ class CommunityStrategistAgent extends BaseAgent {
       try {
         const about = await this.fetchJson(
           `https://www.reddit.com/r/${subName}/about.json`,
-          { 'User-Agent': 'BeaconOps/2.0 Community Strategist' }
+          { 'User-Agent': 'BeaconOps/2.0 Community Scout' }
         );
         rulesData.sidebar = (about?.data?.description || '').slice(0, 3000);
         rulesData.description = about?.data?.public_description || rulesData.description;
@@ -151,7 +153,7 @@ class CommunityStrategistAgent extends BaseAgent {
       try {
         const rules = await this.fetchJson(
           `https://www.reddit.com/r/${subName}/about/rules.json`,
-          { 'User-Agent': 'BeaconOps/2.0 Community Strategist' }
+          { 'User-Agent': 'BeaconOps/2.0 Community Scout' }
         );
         rulesData.existingRules = (rules?.rules || []).map(r => ({
           title: r.short_name,
@@ -164,7 +166,7 @@ class CommunityStrategistAgent extends BaseAgent {
       try {
         const wiki = await this.fetchJson(
           `https://www.reddit.com/r/${subName}/wiki/rules.json`,
-          { 'User-Agent': 'BeaconOps/2.0 Community Strategist' }
+          { 'User-Agent': 'BeaconOps/2.0 Community Scout' }
         );
         rulesData.wiki = (wiki?.data?.content_md || '').slice(0, 3000);
       } catch (e) { /* optional */ }
@@ -173,7 +175,7 @@ class CommunityStrategistAgent extends BaseAgent {
       try {
         const hot = await this.fetchJson(
           `https://www.reddit.com/r/${subName}/hot.json?limit=5`,
-          { 'User-Agent': 'BeaconOps/2.0 Community Strategist' }
+          { 'User-Agent': 'BeaconOps/2.0 Community Scout' }
         );
         rulesData.pinnedPosts = (hot?.data?.children || [])
           .filter(c => c.data?.stickied)
@@ -507,4 +509,4 @@ Classification guide:
   }
 }
 
-module.exports = CommunityStrategistAgent;
+module.exports = CommunityPlanner;

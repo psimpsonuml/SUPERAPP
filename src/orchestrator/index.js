@@ -160,6 +160,35 @@ class Orchestrator {
       logger.info(`Scheduled weekly agent: ${agent.agentId}`, { cron: agent.cron });
     }
 
+    // Schedule monthly agents
+    for (const agent of schedule.monthly || []) {
+      await this.taskQueue.add(agent.agentId, {
+        agentId: agent.agentId,
+        accountId: this.accountId,
+        options: agent.options || {},
+      }, {
+        repeat: { pattern: agent.cron, tz: config.agents.timezone },
+        jobId: `${agent.agentId}-monthly`,
+      });
+      logger.info(`Scheduled monthly agent: ${agent.agentId}`, { cron: agent.cron });
+    }
+
+    // Schedule agents whose frequency is env-configurable
+    for (const agent of schedule.configurable || []) {
+      await this.taskQueue.add(agent.agentId, {
+        agentId: agent.agentId,
+        accountId: this.accountId,
+        options: agent.options || {},
+      }, {
+        repeat: { pattern: agent.cron, tz: config.agents.timezone },
+        jobId: `${agent.agentId}-configurable`,
+      });
+      logger.info(`Scheduled ${agent.frequency} agent: ${agent.agentId}`, {
+        cron: agent.cron,
+        configuredBy: agent.envVar,
+      });
+    }
+
     // Schedule daily report
     await this.taskQueue.add('daily-report', {
       agentId: 'daily-report',

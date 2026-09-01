@@ -44,7 +44,7 @@ class CommunityScoutAgent extends BaseAgent {
     super(accountId, {
       agentId: 'community-scout',
       agentName: 'Community Scout',
-      cycle: 'weekly',
+      cycle: 'monthly',
       defaultTier: 2,
     });
   }
@@ -52,7 +52,16 @@ class CommunityScoutAgent extends BaseAgent {
   // ── Main run — accepts options for partial runs ────────
   async run(options = {}) {
     const { redditOnly = false } = options;
-    const results = { communitiesDiscovered: 0, updated: 0, byProduct: {}, byPlatform: {} };
+    const results = {
+      communitiesDiscovered: 0,
+      updated: 0,
+      byProduct: {},
+      byPlatform: {},
+      communitiesAnalyzed: 0,
+      calendarEntriesCreated: 0,
+      flaggedForReview: 0,
+      warmupScheduled: 0,
+    };
     const platformsToScan = redditOnly ? ['reddit'] : PLATFORMS;
 
     for (const productId of Object.keys(PRODUCT_KEYWORDS)) {
@@ -84,9 +93,19 @@ class CommunityScoutAgent extends BaseAgent {
       }
     }
 
-    // Hand off to Community Strategist for rule parsing + content calendar
-    if (results.communitiesDiscovered > 0) {
-      await this.triggerStrategist();
+    // Phase 2: parse rules and build next week's content calendar.
+    // Runs every cycle — existing communities need their calendar regenerated
+    // even when discovery turns up nothing new.
+    try {
+      const planning = await this.runPlanningPhase();
+      results.communitiesAnalyzed = planning.communitiesAnalyzed;
+      results.calendarEntriesCreated = planning.calendarEntriesCreated;
+      results.flaggedForReview = planning.flaggedForReview;
+      results.warmupScheduled = planning.warmupScheduled;
+      this.itemsProduced = planning.calendarEntriesCreated;
+    } catch (err) {
+      this.logger.warn('Planning phase failed', { error: err.message, agentId: this.agentId });
+      this.errors.push({ message: `Planning phase: ${err.message}` });
     }
 
     return results;
@@ -366,25 +385,20 @@ class CommunityScoutAgent extends BaseAgent {
     return 'new';
   }
 
-  // ── Trigger Community Strategist for rule parsing ──────
-  async triggerStrategist() {
-    try {
-      const { createAgent } = require('./registry');
-      const strategist = createAgent('community-strategist', this.accountId);
-      this.logger.info('Handing off to Community Strategist for rule parsing and content calendar', {
-        agentId: this.agentId,
-      });
-      // Queue rather than await — let the orchestrator handle it
-      await this.supabase.from('agent_runs').insert({
-        account_id: this.accountId,
-        agent_id: 'community-strategist',
-        status: 'queued',
-        triggered_by: 'community-scout',
-        run_started_at: new Date().toISOString(),
-      });
-    } catch (err) {
-      this.logger.warn('Could not trigger Community Strategist', { error: err.message });
-    }
+  // ── Phase 2: rule parsing + content calendar generation ─
+  async runPlanningPhase() {
+    const CommunityPlanner = require('./community-planner');
+    const planner = new CommunityPlanner({
+      accountId: this.accountId,
+      supabase: this.supabase,
+      logger: this.logger,
+    });
+
+    this.logger.info('Starting planning phase: rule parsing and content calendar', {
+      agentId: this.agentId,
+    });
+
+    return planner.plan();
   }
 
   // ── Reddit rule assessment helpers ─────────────────────

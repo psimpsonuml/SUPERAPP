@@ -577,9 +577,8 @@ function PhotosTab({ data }) {
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }}>
         <StatCard value={data.totalPhotos} label="Total Photos" />
-        <StatCard value={data.locationCount} label="Geotagged" />
         <StatCard value={data.photosByYear?.length || 0} label="Years of Photos" />
       </div>
 
@@ -587,15 +586,6 @@ function PhotosTab({ data }) {
         <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 16, border: '1px solid var(--border)', marginBottom: 20 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Photos Per Year</h3>
           <BarChart data={data.photosByYear} xKey="year" yKey="count" color="#d97706" label="photos" />
-        </div>
-      )}
-
-      {data.locations?.length > 0 && (
-        <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 16, border: '1px solid var(--border)' }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Photo Locations ({data.locationCount} geotagged)</h3>
-          <p className="text-sm text-muted">
-            Photo locations data available. {data.locationCount} photos have GPS coordinates across {data.photosByYear?.length || 0} years.
-          </p>
         </div>
       )}
     </div>

@@ -108,7 +108,6 @@ function getBuiltInEntries() {
     { feature_id: 'pain-point-hunter', feature_name: 'Pain Point Hunter', category: 'operations', visibility: 'public', description: 'Scans Reddit, forums, and communities for people expressing problems your product solves. Drafts contextual responses.' },
     { feature_id: 'approval-queue', feature_name: 'Approval Queue', category: 'operations', visibility: 'public', description: 'Central hub for reviewing all agent-generated content before publication. Supports batch approve/reject and inline editing.' },
     { feature_id: 'entertainment', feature_name: 'Entertainment Ranker', category: 'personal', visibility: 'public', description: 'Rate movies, TV shows, and wrestling matches. Cascade scoring automatically ranks directors, actors, and other people.' },
-    { feature_id: 'companion', feature_name: 'Personal Companion', category: 'personal', visibility: 'premium_only', description: 'AI personality that knows you through all personal modules. Daily check-ins, life coaching, and optional romantic companion mode.' },
   ];
 }
 

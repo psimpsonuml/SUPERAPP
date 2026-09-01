@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { fetchLegalDocument, generateLegalDocument, publishLegalDocument, updateLegalDocument, fetchLegalVersions } from '../../lib/api';
+import { fetchLegalDocument, generateLegalDocument, publishLegalDocument, updateLegalDocument } from '../../lib/api';
 
 export default function TermsPage() {
   const [doc, setDoc] = useState(null);
-  const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -15,12 +14,8 @@ export default function TermsPage() {
 
   async function load() {
     try {
-      const [docRes, versRes] = await Promise.all([
-        fetchLegalDocument('terms_of_service'),
-        fetchLegalVersions('terms_of_service'),
-      ]);
+      const docRes = await fetchLegalDocument('terms_of_service');
       setDoc(docRes.document);
-      setVersions(versRes.versions || []);
       if (docRes.document) setEditContent(docRes.document.content_markdown);
     } catch {} finally { setLoading(false); }
   }

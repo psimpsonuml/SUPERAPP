@@ -13,8 +13,6 @@ const MODULE_META = {
   facebook:      { color: '#1877f2', label: 'Facebook',      icon: 'f' },
   journal:       { color: '#8b5cf6', label: 'Journal',       icon: 'J' },
   entertainment: { color: '#ef4444', label: 'Entertainment', icon: 'E' },
-  books:         { color: '#10b981', label: 'Books',         icon: 'B' },
-  music:         { color: '#f59e0b', label: 'Music',         icon: 'M' },
   goals:         { color: '#3b82f6', label: 'Goals',         icon: 'G' },
   family:        { color: '#ec4899', label: 'Family',        icon: 'F' },
   learning:      { color: '#06b6d4', label: 'Learning',      icon: 'L' },

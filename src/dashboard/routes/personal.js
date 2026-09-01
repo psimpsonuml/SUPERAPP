@@ -60,31 +60,6 @@ router.get('/entertainment/cascade', async (req, res) => {
   res.json({ scores: data || [] });
 });
 
-// ── Books ────────────────────────────────────────────────────
-
-router.get('/books', async (req, res) => {
-  const { data } = await safeQuery((sb) =>
-    sb.from('book_items').select('*, book_ratings(*)').eq('account_id', req.accountId).order('created_at', { ascending: false }).limit(100)
-  );
-  res.json({ books: data || [] });
-});
-
-router.post('/books/rate', async (req, res) => {
-  const { title, author, score, status } = req.body;
-  if (!title) return res.status(400).json({ error: 'title required' });
-  try {
-    if (!isSupabaseConfigured()) return res.status(503).json({ error: 'Database not configured' });
-    const supabase = getSupabase();
-    const { data } = await supabase.from('book_items').upsert({
-      account_id: req.accountId, title, author, status: status || 'finished',
-      score: score || null, updated_at: new Date().toISOString(),
-    }, { onConflict: 'account_id,title' }).select().single();
-    res.json({ book: data });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ── Reminders (Life Manager) ─────────────────────────────────
 
 router.get('/reminders', async (req, res) => {
@@ -637,44 +612,6 @@ Write conversationally, like a supportive coach. Use specific numbers from their
   }
 });
 
-// GET /health/dna-crossref — cross-reference health with DNA data if available
-router.get('/health/dna-crossref', async (req, res) => {
-  try {
-    // Check if DNA data exists (cross-reference with dna_personal table)
-    const { data: dnaData } = await safeQuery(sb =>
-      sb.from('dna_personal').select('snp_id, genotype, source_service')
-        .eq('account_id', req.accountId)
-        .limit(50)
-    );
-
-    if (!dnaData?.length) {
-      return res.json({ available: false, insights: [] });
-    }
-
-    // Check if we have health metrics
-    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    const { data: metrics } = await safeQuery(sb =>
-      sb.from('health_metrics').select('metric_type, value, date')
-        .eq('account_id', req.accountId)
-        .gte('date', since)
-        .limit(100)
-    );
-
-    if (!metrics?.length) {
-      return res.json({ available: true, insights: [], message: 'Need health data for cross-reference' });
-    }
-
-    res.json({
-      available: true,
-      dnaSnps: dnaData.length,
-      healthMetrics: [...new Set(metrics.map(m => m.metric_type))],
-      insights: [],
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // DELETE /health — delete all health data
 router.delete('/health', async (req, res) => {
   try {
@@ -930,25 +867,6 @@ router.get('/releases', async (req, res) => {
     sb.from('release_digest').select('*').eq('account_id', req.accountId).order('release_date', { ascending: false }).limit(30)
   );
   res.json({ releases: data || [] });
-});
-
-// ── Music ────────────────────────────────────────────────────
-
-router.get('/music', async (req, res) => {
-  const { data } = await safeQuery((sb) =>
-    sb.from('music_items').select('*, music_ratings(*)').eq('account_id', req.accountId).order('created_at', { ascending: false }).limit(100)
-  );
-  res.json({ music: data || [] });
-});
-
-// ── Finance Snapshot ─────────────────────────────────────────
-
-router.get('/finance', async (req, res) => {
-  // Read-only Budgeting Beacon integration — pulls summary
-  const { data } = await safeQuery((sb) =>
-    sb.from('finance_snapshot').select('*').eq('account_id', req.accountId).order('snapshot_date', { ascending: false }).limit(1)
-  );
-  res.json({ snapshot: data?.[0] || null });
 });
 
 // ── Facebook Archaeologist ───────────────────────────────────

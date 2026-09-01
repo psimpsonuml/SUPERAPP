@@ -7,7 +7,6 @@ const SocialDistributorAgent = require('./social-distributor');
 const VideoProducerAgent = require('./video-producer');
 const ContentLibraryManagerAgent = require('./content-library-manager');
 const CommunityScoutAgent = require('./community-scout');
-const CommunityStrategistAgent = require('./community-strategist');
 const PainPointHunterAgent = require('./pain-point-hunter');
 const QaPlaytestAgent = require('./qa-playtest');
 const OutreachProspectorAgent = require('./outreach-prospector');
@@ -16,14 +15,14 @@ const AdCreativeAgent = require('./ad-creative');
 const ProductIntelligenceAgent = require('./product-intelligence');
 const UserLifecycleAgent = require('./user-lifecycle');
 const InfrastructureMonitorAgent = require('./infrastructure-monitor');
-const BuilderCommunityAgent = require('./builder-community');
+const WrestlingScraperAgent = require('./wrestling-scraper');
 
 const registry = {
   'inbox-monitor': {
     Agent: InboxMonitorAgent,
     name: 'Inbox Monitor',
-    domain: 'Email monitoring & response',
-    cycle: 'continuous',
+    domain: 'Email classification & response drafting',
+    cycle: 'configurable',
     essential: true,
     criticalOnFailure: true,
   },
@@ -70,16 +69,8 @@ const registry = {
   'community-scout': {
     Agent: CommunityScoutAgent,
     name: 'Community Scout',
-    domain: 'Group/community discovery',
-    cycle: 'weekly',
-    essential: false,
-    criticalOnFailure: false,
-  },
-  'community-strategist': {
-    Agent: CommunityStrategistAgent,
-    name: 'Community Strategist',
-    domain: 'Rule-aware content calendar',
-    cycle: 'weekly',
+    domain: 'Community discovery + rule-aware content calendar',
+    cycle: 'monthly',
     essential: false,
     criticalOnFailure: false,
   },
@@ -111,7 +102,7 @@ const registry = {
     Agent: IntelligenceAnalystAgent,
     name: 'Intelligence Analyst',
     domain: 'Influencer/platform/publisher research',
-    cycle: 'daily',
+    cycle: 'weekly',
     essential: false,
     criticalOnFailure: false,
   },
@@ -147,11 +138,11 @@ const registry = {
     essential: true,
     criticalOnFailure: true,
   },
-  'builder-community': {
-    Agent: BuilderCommunityAgent,
-    name: 'Builder Community',
-    domain: 'Builder intel gathering & promo posting',
-    cycle: 'daily',
+  'wrestling-scraper': {
+    Agent: WrestlingScraperAgent,
+    name: 'Wrestling Results Scraper',
+    domain: 'Weekly wrestling results + statistics',
+    cycle: 'weekly',
     essential: false,
     criticalOnFailure: false,
   },

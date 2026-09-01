@@ -580,36 +580,7 @@ CREATE TABLE IF NOT EXISTS family_log (
 -- BOOKS MODULE
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS book_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  open_library_id TEXT,
-  title TEXT NOT NULL,
-  author TEXT,
-  year INTEGER,
-  genre TEXT,
-  cover_url TEXT,
-  page_count INTEGER,
-  description TEXT,
-  metadata_json JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(account_id, open_library_id),
-  UNIQUE(account_id, title, author)
-);
 
-CREATE TABLE IF NOT EXISTS book_ratings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  book_id UUID NOT NULL REFERENCES book_items(id) ON DELETE CASCADE,
-  score INTEGER CHECK (score >= 1 AND score <= 10),
-  status TEXT NOT NULL DEFAULT 'rated',
-  notes TEXT,
-  rated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(account_id, book_id)
-);
 
 -- ============================================================
 -- BUILDER INTEL
@@ -756,38 +727,10 @@ CREATE INDEX IF NOT EXISTS idx_legal_documents_type ON legal_documents(account_i
 -- ═══════════════════════════════════════════════════════════
 -- Personal Companion
 -- ═══════════════════════════════════════════════════════════
-CREATE TABLE IF NOT EXISTS companion_settings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  account_id UUID NOT NULL UNIQUE REFERENCES accounts(id) ON DELETE CASCADE,
-  mode TEXT NOT NULL DEFAULT 'coach' CHECK (mode IN ('coach', 'buddy', 'mentor', 'romantic', 'cheerleader')),
-  companion_name TEXT NOT NULL DEFAULT 'Beacon',
-  personality_intensity TEXT NOT NULL DEFAULT 'moderate' CHECK (personality_intensity IN ('subtle', 'moderate', 'expressive')),
-  checkin_frequency TEXT NOT NULL DEFAULT 'daily' CHECK (checkin_frequency IN ('daily', 'twice_daily', 'weekly')),
-  checkin_time TEXT NOT NULL DEFAULT '08:00',
-  gender_preference TEXT DEFAULT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
 
-CREATE TABLE IF NOT EXISTS companion_conversations (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  messages_json JSONB NOT NULL DEFAULT '[]',
-  context_summary TEXT,
-  model_used TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
 
 CREATE INDEX IF NOT EXISTS idx_companion_conversations_account ON companion_conversations(account_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS companion_checkins (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  checkin_message TEXT NOT NULL,
-  modules_referenced JSONB DEFAULT '[]',
-  delivered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  acknowledged BOOLEAN NOT NULL DEFAULT FALSE
-);
 
 CREATE INDEX IF NOT EXISTS idx_companion_checkins_account ON companion_checkins(account_id, delivered_at DESC);
 
@@ -814,7 +757,6 @@ INSERT INTO feature_visibility (feature_id, feature_name, category, visibility, 
   ('video-producer', 'Video Producer', 'operations', 'public', 'TikTok/YouTube video pipeline'),
   ('content-library-manager', 'Content Library Manager', 'operations', 'public', 'Content injection & management'),
   ('community-scout', 'Community Scout', 'operations', 'public', 'Group & community discovery'),
-  ('community-strategist', 'Community Strategist', 'operations', 'public', 'Rule-aware content calendar'),
   ('pain-point-hunter', 'Pain Point Hunter', 'operations', 'public', 'Community & market signal scan'),
   ('qa-playtest', 'QA Playtest', 'operations', 'public', 'Automated product testing'),
   ('outreach-prospector', 'Outreach Prospector', 'operations', 'public', 'Lead search + email drafting'),
@@ -831,24 +773,20 @@ INSERT INTO feature_visibility (feature_id, feature_name, category, visibility, 
   ('testimonials', 'Testimonial Library', 'operations', 'public', 'Social proof management'),
   ('partners', 'Partner Manager', 'operations', 'public', 'Affiliate/partner referrals & commissions'),
   ('entertainment', 'Entertainment Ranker', 'personal', 'public', 'Movie/TV/wrestling cascade scoring'),
-  ('books', 'Book Ranker', 'personal', 'public', 'Book ranking with author cascade'),
-  ('music', 'Music Discovery', 'personal', 'public', 'Spotify integration + artist cascade'),
+  ('wrestling', 'Wrestling Tracker', 'personal', 'public', 'Scraped results, match ratings, wrestler cascade'),
+  ('wrestling-scraper', 'Wrestling Results Scraper', 'operations', 'internal_only', 'Weekly results scrape + statistics'),
   ('life-reminders', 'Life Manager (Reminders)', 'personal', 'public', 'Daily reminders & routine tracking'),
   ('releases', 'Release Tracker', 'personal', 'public', 'Streaming/theater/game new releases'),
   ('podcasts', 'Podcast Tracker', 'personal', 'public', 'Podcast subscriptions & ratings'),
-  ('sports', 'Sports Tracker', 'personal', 'public', 'Teams, game ratings, cascade'),
   ('beaconbot', 'BeaconBot', 'operations', 'public', 'AI chatbot support mode'),
   ('faq', 'FAQ Page', 'platform', 'public', 'Auto-generated feature documentation'),
   ('privacy-policy', 'Privacy Policy', 'platform', 'public', 'Data handling & privacy documentation'),
   ('terms-of-service', 'Terms of Service', 'platform', 'public', 'Platform usage terms'),
   ('about', 'About Page', 'platform', 'public', 'Platform info & founder story'),
   -- Premium only (Growth plan+)
-  ('companion', 'Personal Companion', 'personal', 'premium_only', 'AI life coach, buddy, or romantic companion'),
-  ('dna', 'DNA Analyst', 'personal', 'premium_only', '23andMe + genetics atlas'),
   ('facebook', 'Facebook Archaeologist', 'personal', 'premium_only', 'Facebook data export analysis'),
   ('life-full', 'Life Manager (Full)', 'personal', 'premium_only', 'Family log, milestones, contribution grid'),
   ('health', 'Health Dashboard', 'personal', 'premium_only', 'Fitness/health data aggregation'),
-  ('finance', 'Finance Snapshot', 'personal', 'premium_only', 'Budgeting Beacon integration'),
   ('journal', 'Journal/Reflection', 'personal', 'premium_only', 'Daily reflection, sentiment tracking'),
   ('goals', 'Goal Tracker', 'personal', 'premium_only', 'Long-term aspirations & milestones'),
   ('nostalgia', 'Nostalgia Engine', 'personal', 'premium_only', 'On-this-day memories'),
@@ -858,7 +796,6 @@ INSERT INTO feature_visibility (feature_id, feature_name, category, visibility, 
   ('news', 'News & Social Feed', 'personal', 'premium_only', 'Multi-viewpoint news aggregation'),
   ('events', 'Live Event Tracker', 'personal', 'premium_only', 'Concerts, shows, event discovery'),
   ('pets', 'Pets', 'personal', 'premium_only', 'Pet health records & milestones'),
-  ('dating', 'Dating Profile Monitor', 'personal', 'premium_only', 'Dating profile analytics & management'),
   ('stores', 'Store Connections', 'personal', 'premium_only', 'Shopify/Etsy/eBay/Poshmark tracker'),
   ('podcast-producer', 'Podcast Producer', 'operations', 'premium_only', 'AI podcast episode generation'),
   ('satellite-blogs', 'Satellite Blog Network', 'operations', 'premium_only', 'Multi-site blog management'),
@@ -867,7 +804,6 @@ INSERT INTO feature_visibility (feature_id, feature_name, category, visibility, 
   ('design', 'Design Studio', 'operations', 'premium_only', 'Graphic design asset generation'),
   ('book-publishing', 'Book Publishing', 'operations', 'premium_only', 'Manuscript, queries, sales tracking'),
   -- Internal only
-  ('builder-community', 'Market Research', 'operations', 'internal_only', 'Builder intel & competitive monitoring'),
   ('feature-visibility', 'Feature Visibility Manager', 'configuration', 'internal_only', 'Control feature access per plan'),
   ('system-admin', 'System Admin', 'configuration', 'internal_only', 'Raw Supabase admin access')
 ON CONFLICT (feature_id) DO NOTHING;

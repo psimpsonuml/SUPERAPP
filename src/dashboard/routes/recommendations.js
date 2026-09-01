@@ -156,8 +156,7 @@ router.post('/lists/auto-generate', async (req, res) => {
       top_movies: { title: 'My Top 20 Movies', table: 'cascade_scores', filter: { item_type: 'movie' }, limit: 20 },
       top_directors: { title: 'My Favorite Directors', table: 'cascade_scores', filter: { item_type: 'director' }, limit: 15 },
       hidden_gems: { title: 'Hidden Gems I Love', table: 'cascade_scores', filter: { item_type: 'movie' }, limit: 20, maxPopularity: 50 },
-      best_books: { title: 'My Best Books', table: 'cascade_scores', filter: { item_type: 'book' }, limit: 20 },
-      top_artists: { title: 'My Top Artists', table: 'cascade_scores', filter: { item_type: 'artist' }, limit: 15 },
+      top_wrestlers: { title: 'My Top Wrestlers', table: 'wrestling_cascade_scores', filter: {}, limit: 20 },
     };
 
     const config = typeConfig[list_type];

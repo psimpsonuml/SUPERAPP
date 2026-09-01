@@ -14,13 +14,10 @@ const personalRoutes = require('./dashboard/routes/personal');
 const tmdbRoutes = require('./dashboard/routes/tmdb');
 const quizRoutes = require('./dashboard/routes/quiz');
 const lifeManagerRoutes = require('./dashboard/routes/life-manager');
-const booksRoutes = require('./dashboard/routes/books');
 const releasesRoutes = require('./dashboard/routes/releases');
 const infrastructureRoutes = require('./dashboard/routes/infrastructure');
 const calendarRoutes = require('./dashboard/routes/calendar');
-const musicRoutes = require('./dashboard/routes/music');
 const onboardingRoutes = require('./dashboard/routes/onboarding');
-const dnaRoutes = require('./dashboard/routes/dna');
 const revenueRoutes = require('./dashboard/routes/revenue');
 const knowledgeBaseRoutes = require('./dashboard/routes/knowledge-base');
 const testimonialRoutes = require('./dashboard/routes/testimonials');
@@ -29,12 +26,11 @@ const journalRoutes = require('./dashboard/routes/journal');
 const goalRoutes = require('./dashboard/routes/goals');
 const nostalgiaRoutes = require('./dashboard/routes/nostalgia');
 const recommendationRoutes = require('./dashboard/routes/recommendations');
-const sportsRoutes = require('./dashboard/routes/sports');
+const wrestlingRoutes = require('./dashboard/routes/wrestling');
 const petRoutes = require('./dashboard/routes/pets');
 const liveEventRoutes = require('./dashboard/routes/live-events');
 const storeRoutes = require('./dashboard/routes/stores');
 const podcastRoutes = require('./dashboard/routes/podcasts');
-const datingRoutes = require('./dashboard/routes/dating');
 const prRoutes = require('./dashboard/routes/pr');
 const designRoutes = require('./dashboard/routes/design');
 const podcastProducerRoutes = require('./dashboard/routes/podcast-producer');
@@ -42,7 +38,6 @@ const beaconbotRoutes = require('./dashboard/routes/beaconbot');
 const bookPublishingRoutes = require('./dashboard/routes/book-publishing');
 const featureVisibilityRoutes = require('./dashboard/routes/feature-visibility');
 const legalRoutes = require('./dashboard/routes/legal');
-const companionRoutes = require('./dashboard/routes/companion');
 const faqRoutes = require('./dashboard/routes/faq');
 const cronRoutes = require('./dashboard/routes/cron');
 const dailyReportCronRoute = require('./dashboard/routes/daily-report');
@@ -136,13 +131,10 @@ app.use('/api/personal', personalRoutes); // personal module has its own gracefu
 app.use('/api/tmdb', tmdbRoutes); // TMDB browse/rate with cascade scoring
 app.use('/api/quiz', quizRoutes); // Profile quiz with 200+ questions
 app.use('/api/life', lifeManagerRoutes); // Life Manager: routines, family log, streaks
-app.use('/api/books', booksRoutes); // Books: discover, rate, author cascade
 app.use('/api/releases', releasesRoutes); // Releases: weekly TMDB digest with personalization
 app.use('/api/infrastructure', infrastructureRoutes); // Infrastructure: status, uptime, alerts
 app.use('/api/calendar', requireSupabase, calendarRoutes); // Content calendar: weekly schedule
-app.use('/api/music', musicRoutes); // Music discovery: Spotify integration + cascade scoring
 app.use('/api/onboarding', requireSupabase, onboardingRoutes); // Onboarding: platform asset generation + setup checklists
-app.use('/api/dna', requireSupabase, dnaRoutes); // DNA Analyst: genetics atlas, personal genotypes, reports
 app.use('/api/revenue', requireSupabase, revenueRoutes); // Revenue Dashboard: Stripe metrics, MRR, churn
 app.use('/api/kb', requireSupabase, knowledgeBaseRoutes); // Knowledge Base: support articles, FAQ, gap detection
 app.use('/api/testimonials', requireSupabase, testimonialRoutes); // Testimonials: social proof library
@@ -151,12 +143,11 @@ app.use('/api/journal', requireSupabase, journalRoutes); // Journal: daily refle
 app.use('/api/goals', requireSupabase, goalRoutes); // Goals: long-term aspirations, milestones
 app.use('/api/nostalgia', requireSupabase, nostalgiaRoutes); // Nostalgia Engine: on-this-day memories
 app.use('/api/recommendations', requireSupabase, recommendationRoutes); // Recommendations: curated lists, watch parties
-app.use('/api/sports', requireSupabase, sportsRoutes); // Sports Tracker: teams, game ratings, cascade
+app.use('/api/wrestling', requireSupabase, wrestlingRoutes); // Wrestling Tracker: scraped results, ratings, cascade
 app.use('/api/pets', requireSupabase, petRoutes); // Pets: health records, milestones, expenses
 app.use('/api/events', requireSupabase, liveEventRoutes); // Live Events: concerts, shows, map
 app.use('/api/stores', requireSupabase, storeRoutes); // Stores: seller dashboard, tracker, wishlist
 app.use('/api/podcasts', requireSupabase, podcastRoutes); // Podcasts: subscriptions, ratings, cascade
-app.use('/api/dating', requireSupabase, datingRoutes); // Dating: profile management, analytics
 app.use('/api/pr', requireSupabase, prRoutes); // PR: media contacts, press releases, mentions
 app.use('/api/design', requireSupabase, designRoutes); // Design Studio: asset generation, templates
 app.use('/api/podcast-producer', requireSupabase, podcastProducerRoutes); // Podcast Producer: AI episodes
@@ -164,7 +155,6 @@ app.use('/api/beaconbot', requireSupabase, beaconbotRoutes); // BeaconBot: AI ch
 app.use('/api/book-publishing', requireSupabase, bookPublishingRoutes); // Book Publishing: manuscripts, queries, sales
 app.use('/api/features', requireSupabase, featureVisibilityRoutes); // Feature Visibility: control feature access per plan
 app.use('/api/legal', requireSupabase, legalRoutes); // Legal: privacy policy, terms of service
-app.use('/api/companion', requireSupabase, companionRoutes); // Personal Companion: AI coach/buddy/mentor
 app.use('/api/faq', faqRoutes); // FAQ: auto-generated feature documentation
 
 // Vercel Cron endpoints — secured by CRON_SECRET, no Supabase guard (agents handle own DB)
