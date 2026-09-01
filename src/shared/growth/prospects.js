@@ -274,6 +274,68 @@ class GrowthProspectsService {
     return data;
   }
 
+  /**
+   * Store a research card and merge the evidence-backed signals it
+   * found, then re-score. Apollo cannot supply remote/hiring/activity
+   * signals, so research is the only place those points can be earned —
+   * and only with cited evidence (see research.js extractSignals).
+   */
+  async saveResearch(prospectId, { card, signals = {}, evidence = [] }) {
+    const prospect = await this.get(prospectId);
+    if (!prospect) throw new Error('Prospect not found');
+
+    const mergedMetadata = {
+      ...(prospect.metadata || {}),
+      ...signals,
+      research_evidence: evidence,
+    };
+
+    const { error } = await this.db
+      .from('growth_prospects')
+      .update({
+        research_card: card,
+        researched_at: new Date().toISOString(),
+        metadata: mergedMetadata,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', prospectId).eq('account_id', this.accountId);
+
+    if (error) throw new Error(`Failed to save research: ${error.message}`);
+
+    await this.logEvent(prospectId, 'researched', {
+      signalsFound: Object.keys(signals).filter(k => !k.endsWith('_evidence')),
+      evidenceCount: evidence.length,
+      recommendedAsset: card?.recommended_asset,
+    });
+
+    // Re-score: the new signals may move the prospect into a higher band
+    const before = prospect.payroll_fit_score;
+    const rescored = await this.scoreAndSave(prospectId);
+
+    if (rescored.payroll_fit_score !== before) {
+      logger.info(
+        `Research moved ${prospect.full_name} from ${before} to ${rescored.payroll_fit_score}`,
+        { accountId: this.accountId, prospectId }
+      );
+    }
+
+    return rescored;
+  }
+
+  /** Priority prospects that have not been researched yet. */
+  async listNeedingResearch({ limit = 20 } = {}) {
+    const { data } = await this.db
+      .from('growth_prospects')
+      .select('*')
+      .eq('account_id', this.accountId)
+      .eq('fit_band', 'priority')
+      .is('researched_at', null)
+      .not('status', 'in', '("disqualified","do_not_contact","converted")')
+      .order('payroll_fit_score', { ascending: false })
+      .limit(limit);
+    return data || [];
+  }
+
   // ── Reads ───────────────────────────────────────────────
 
   async get(id) {

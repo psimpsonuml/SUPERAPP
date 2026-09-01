@@ -11,6 +11,7 @@ const ContentGenerator = require('../../shared/growth/generator');
 const GrowthCalendarService = require('../../shared/growth/calendar');
 const ProspectImportService = require('../../shared/growth/import');
 const providers = require('../../shared/growth/providers');
+const ProspectResearchService = require('../../shared/growth/research');
 const logger = require('../../shared/logger');
 
 const router = express.Router();
@@ -747,6 +748,122 @@ router.get('/import/preview', async (req, res) => {
   } catch (error) {
     const code = error.code === 'PROVIDER_UNAVAILABLE' ? 503 : 500;
     res.status(code).json({ error: error.message, code: error.code });
+  }
+});
+
+
+// ── RESEARCH + SCORING (spec §7, §8) ──────────────────────
+
+// GET /api/growth/research/assets — the resources a card can recommend
+router.get('/research/assets', (_req, res) => {
+  res.json({ assets: ProspectResearchService.PAYROLL_BEACON_ASSETS });
+});
+
+// GET /api/growth/research/pending — priority prospects not yet researched
+router.get('/research/pending', async (req, res) => {
+  try {
+    const service = new GrowthProspectsService(req.accountId);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    res.json({ prospects: await service.listNeedingResearch({ limit }) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/prospects/:id/research — generate a card and re-score
+router.post('/prospects/:id/research', async (req, res) => {
+  try {
+    const prospectService = new GrowthProspectsService(req.accountId);
+    const prospect = await prospectService.get(req.params.id);
+    if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
+
+    const costService = new GrowthCostService(req.accountId);
+    const research = new ProspectResearchService(req.accountId, { costService });
+
+    const before = prospect.payroll_fit_score;
+    const result = await research.research(prospect);
+    const updated = await prospectService.saveResearch(prospect.id, result);
+
+    res.json({
+      prospect: updated,
+      card: result.card,
+      signals_found: Object.keys(result.signals).filter(k => !k.endsWith('_evidence')),
+      evidence_count: result.evidence.length,
+      searched: result.searched,
+      score_before: before,
+      score_after: updated.payroll_fit_score,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/scoring — current weights, bands, and ICP
+router.get('/scoring', async (req, res) => {
+  try {
+    const settings = new GrowthSettingsService(req.accountId);
+    const [weights, bands, icp] = await Promise.all([
+      settings.get('scoring_weights'),
+      settings.get('fit_bands'),
+      settings.get('icp'),
+    ]);
+
+    // Which components Apollo can supply on its own, versus which need
+    // research. Without this the max achievable score looks broken.
+    const apolloSupplied = ['title_fit', 'company_size', 'multi_state', 'industry_complexity', 'company_growth'];
+    const researchOnly = ['distributed_workforce', 'payroll_hiring', 'linkedin_activity'];
+
+    res.json({
+      weights, bands, icp,
+      total: Object.values(weights).reduce((s, n) => s + n, 0),
+      apollo_supplied: apolloSupplied,
+      research_only: researchOnly,
+      max_without_research: apolloSupplied.reduce((s, k) => s + (weights[k] || 0), 0),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/scoring/simulate — score a hypothetical without saving
+router.post('/scoring/simulate', async (req, res) => {
+  try {
+    const service = new GrowthProspectsService(req.accountId);
+    const scored = await service.score({
+      title: req.body?.title,
+      company_size: req.body?.company_size,
+      industry: req.body?.industry,
+      metadata: req.body?.metadata || {},
+    });
+    res.json(scored);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/prospects/rescore — re-score everything after a weight change
+router.post('/prospects/rescore', async (req, res) => {
+  try {
+    const service = new GrowthProspectsService(req.accountId);
+    const limit = Math.min(parseInt(req.body?.limit, 10) || 200, 1000);
+    const prospects = await service.list({ limit });
+
+    const out = { rescored: 0, changed: 0, failed: 0, bandChanges: [] };
+    for (const p of prospects) {
+      try {
+        const updated = await service.scoreAndSave(p.id);
+        out.rescored++;
+        if (updated.payroll_fit_score !== p.payroll_fit_score) out.changed++;
+        if (updated.fit_band !== p.fit_band) {
+          out.bandChanges.push({ id: p.id, name: p.full_name, from: p.fit_band, to: updated.fit_band });
+        }
+      } catch {
+        out.failed++;
+      }
+    }
+    res.json(out);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

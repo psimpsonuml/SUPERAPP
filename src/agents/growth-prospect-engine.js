@@ -2,6 +2,9 @@ const BaseAgent = require('./base-agent');
 const ProspectImportService = require('../shared/growth/import');
 const GrowthProspectsService = require('../shared/growth/prospects');
 const { isConfigured, providerName } = require('../shared/growth/providers');
+const ProspectResearchService = require('../shared/growth/research');
+const GrowthCostService = require('../shared/growth/cost');
+const llm = require('../shared/llm');
 
 // ══════════════════════════════════════════════════════════════════
 // Worker 4 — Prospect Engine (spec §20)
@@ -15,6 +18,7 @@ const { isConfigured, providerName } = require('../shared/growth/providers');
 
 const PAGES_PER_RUN = 2;
 const ENRICH_PER_RUN = 10;
+const RESEARCH_PER_RUN = 10;
 
 class GrowthProspectEngineAgent extends BaseAgent {
   static agentId = 'growth-prospect-engine';
@@ -30,6 +34,8 @@ class GrowthProspectEngineAgent extends BaseAgent {
 
     this.import = new ProspectImportService(accountId);
     this.prospects = new GrowthProspectsService(accountId);
+    this.cost = new GrowthCostService(accountId);
+    this.research = new ProspectResearchService(accountId, { costService: this.cost });
   }
 
   async run(options = {}) {
@@ -101,6 +107,15 @@ class GrowthProspectEngineAgent extends BaseAgent {
       }
     }
 
+    // Research the best-fit prospects. This is also the only place the
+    // remote/hiring/activity signals can be earned — Apollo does not
+    // supply them, so an unresearched prospect caps around 80/100.
+    if (options.research !== false) {
+      results.research = await this.researchPriorityProspects(
+        options.researchLimit || RESEARCH_PER_RUN
+      );
+    }
+
     results.funnel = await this.prospects.funnelCounts();
 
     // Surface the contactability gap plainly — priority prospects with
@@ -117,6 +132,43 @@ class GrowthProspectEngineAgent extends BaseAgent {
 
     this.itemsProduced = results.created;
     return results;
+  }
+
+  /**
+   * Generate research cards for unresearched priority prospects.
+   * Each card re-scores the prospect, since research can supply signals
+   * Apollo cannot.
+   */
+  async researchPriorityProspects(limit) {
+    const out = { attempted: 0, completed: 0, failed: 0, rescored: 0, errors: [] };
+
+    if (!llm.isConfigured()) {
+      out.skipped = 'ANTHROPIC_API_KEY not configured';
+      this.logger.warn('Skipping prospect research — no LLM configured', { agentId: this.agentId });
+      return out;
+    }
+
+    const candidates = await this.prospects.listNeedingResearch({ limit });
+
+    for (const prospect of candidates) {
+      out.attempted++;
+      try {
+        const before = prospect.payroll_fit_score;
+        const result = await this.research.research(prospect);
+        const updated = await this.prospects.saveResearch(prospect.id, result);
+
+        out.completed++;
+        if (updated.payroll_fit_score !== before) out.rescored++;
+      } catch (err) {
+        out.failed++;
+        out.errors.push({ prospectId: prospect.id, error: err.message });
+        this.logger.warn(`Research failed for ${prospect.id}: ${err.message}`, {
+          agentId: this.agentId,
+        });
+      }
+    }
+
+    return out;
   }
 }
 
