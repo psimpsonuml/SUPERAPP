@@ -21,6 +21,7 @@ const GrowthContentResearchAgent = require('./growth-content-research');
 const GrowthContentRepurposerAgent = require('./growth-content-repurposer');
 const GrowthSchedulerAgent = require('./growth-scheduler');
 const GrowthProspectEngineAgent = require('./growth-prospect-engine');
+const GrowthOutreachAssistantAgent = require('./growth-outreach-assistant');
 
 const registry = {
   'inbox-monitor': {
@@ -180,6 +181,14 @@ const registry = {
     name: 'Growth Prospect Engine',
     domain: 'Apollo import -> dedup -> fit score',
     cycle: 'weekly',
+    essential: false,
+    criticalOnFailure: false,
+  },
+  'growth-outreach-assistant': {
+    Agent: GrowthOutreachAssistantAgent,
+    name: 'Growth Outreach Assistant',
+    domain: 'Drafts outreach and builds the daily queue',
+    cycle: 'daily',
     essential: false,
     criticalOnFailure: false,
   },

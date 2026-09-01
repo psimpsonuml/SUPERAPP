@@ -27,6 +27,7 @@ const schedule = {
     { agentId: 'social-distributor', cron: '30 7 * * *', description: 'Prepare daily social posts' },
     { agentId: 'video-producer', cron: '0 8 * * *', description: 'Daily video production pipeline' },
     { agentId: 'outreach-prospector', cron: '30 8 * * *', description: 'Lead search + email drafting' },
+    { agentId: 'growth-outreach-assistant', cron: '30 7 * * 1-5', description: 'Weekday outreach drafting (business days only)' },
     { agentId: 'product-intelligence', cron: '0 9 * * *', description: 'Daily feature/pricing analysis' },
   ],
 

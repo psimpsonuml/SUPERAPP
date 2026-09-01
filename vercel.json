@@ -74,6 +74,10 @@
       "schedule": "30 8 * * *"
     },
     {
+      "path": "/api/cron/growth-outreach-assistant",
+      "schedule": "30 7 * * 1-5"
+    },
+    {
       "path": "/api/cron/product-intelligence",
       "schedule": "0 9 * * *"
     },

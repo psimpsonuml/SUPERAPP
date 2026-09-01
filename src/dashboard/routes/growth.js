@@ -12,6 +12,7 @@ const GrowthCalendarService = require('../../shared/growth/calendar');
 const ProspectImportService = require('../../shared/growth/import');
 const providers = require('../../shared/growth/providers');
 const ProspectResearchService = require('../../shared/growth/research');
+const OutreachService = require('../../shared/growth/outreach');
 const logger = require('../../shared/logger');
 
 const router = express.Router();
@@ -864,6 +865,181 @@ router.post('/prospects/rescore', async (req, res) => {
     res.json(out);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ── OUTREACH QUEUE (spec §9, §10, §11) ────────────────────
+
+// GET /api/growth/outreach — the daily workbench
+router.get('/outreach', async (req, res) => {
+  try {
+    const service = new OutreachService(req.accountId);
+    const [queue, emailCap, liCap] = await Promise.all([
+      service.queue({ limit: Math.min(parseInt(req.query.limit, 10) || 50, 200) }),
+      service.remainingDailyCapacity(),
+      service.linkedinCapacity(),
+    ]);
+
+    res.json({
+      queue,
+      email_capacity: emailCap,
+      linkedin_capacity: liCap,
+      sequences: OutreachService.SEQUENCES,
+      blocked_no_email: queue.filter(q => q.channel === 'email' && !q.prospect.email).length,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/outreach/capacity
+router.get('/outreach/capacity', async (req, res) => {
+  try {
+    const service = new OutreachService(req.accountId);
+    res.json({
+      email: await service.remainingDailyCapacity(),
+      linkedin: await service.linkedinCapacity(),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/outreach/draft — draft for one prospect
+router.post('/outreach/draft', async (req, res) => {
+  try {
+    const { prospect_id, sequence, step, channel } = req.body;
+    if (!prospect_id) return res.status(400).json({ error: 'prospect_id is required' });
+
+    const prospectService = new GrowthProspectsService(req.accountId);
+    const prospect = await prospectService.get(prospect_id);
+    if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
+
+    const costService = new GrowthCostService(req.accountId);
+    const service = new OutreachService(req.accountId, { costService });
+
+    // Respect the daily cap even for manual drafts
+    if ((channel || 'email') === 'email') {
+      const cap = await service.remainingDailyCapacity();
+      if (cap.remaining <= 0) {
+        return res.status(429).json({
+          error: `Daily cold-email cap reached (${cap.used}/${cap.cap}). Raise it in settings if this is deliberate.`,
+          capacity: cap,
+        });
+      }
+    }
+
+    const draft = await service.draft({
+      prospect,
+      sequence: sequence || 'cold',
+      step: step || 1,
+      channel: channel || 'email',
+    });
+
+    const queued = await service.queueOutreach({ prospect, draft, channel: channel || 'email' });
+    if (!queued.queued) {
+      return res.status(409).json({ error: `Cannot queue: ${queued.reason}`, reason: queued.reason, draft });
+    }
+
+    res.json({ draft, outreach: queued.outreach });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/outreach/:id/rewrite — regenerate the same touch
+router.post('/outreach/:id/rewrite', async (req, res) => {
+  try {
+    const service = new OutreachService(req.accountId);
+    const prospectService = new GrowthProspectsService(req.accountId);
+
+    const existing = (await service.list({ limit: 500 })).find(o => o.id === req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Outreach not found' });
+
+    const prospect = await prospectService.get(existing.prospect_id);
+    if (!prospect) return res.status(404).json({ error: 'Prospect not found' });
+
+    const draft = await service.draft({
+      prospect,
+      sequence: existing.sequence,
+      step: existing.step_number,
+      channel: existing.channel,
+      context: req.body?.instruction || null,
+    });
+
+    const updated = await service.updateStatus(req.params.id, existing.status, {
+      subject: draft.subject, body: draft.body,
+    });
+
+    res.json({ outreach: updated, draft });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/outreach/:id/mark-sent — manual send (LinkedIn, spec §11)
+router.post('/outreach/:id/mark-sent', async (req, res) => {
+  try {
+    const service = new OutreachService(req.accountId);
+    res.json({ outreach: await service.markSent(req.params.id, { manual: true }) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/outreach/:id/skip
+router.post('/outreach/:id/skip', async (req, res) => {
+  try {
+    const service = new OutreachService(req.accountId);
+    res.json({ outreach: await service.updateStatus(req.params.id, 'skipped', {
+      failure_reason: req.body?.reason || null,
+    }) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/prospects/:id/outcome — record a reply outcome
+router.post('/prospects/:id/outcome', async (req, res) => {
+  try {
+    const { outcome, notes } = req.body;
+    const map = {
+      replied: { status: 'replied', event: 'reply_positive' },
+      positive: { status: 'positive', event: 'reply_positive' },
+      negative: { status: 'negative', event: 'reply_negative' },
+      meeting: { status: 'meeting', event: 'meeting_booked' },
+      registered: { status: 'registered', event: 'registered' },
+      converted: { status: 'converted', event: 'converted' },
+      disqualified: { status: 'disqualified', event: 'disqualified' },
+      do_not_contact: { status: 'do_not_contact', event: 'unsubscribed' },
+    };
+
+    const mapped = map[outcome];
+    if (!mapped) {
+      return res.status(400).json({ error: `Unknown outcome. Use one of: ${Object.keys(map).join(', ')}` });
+    }
+
+    const service = new GrowthProspectsService(req.accountId);
+    const prospect = await service.setStatus(req.params.id, mapped.status, {
+      event: mapped.event, metadata: { notes: notes || null },
+    });
+    res.json({ prospect });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/prospects/:id/snooze
+router.post('/prospects/:id/snooze', async (req, res) => {
+  try {
+    const days = parseInt(req.body?.days, 10) || 30;
+    const service = new GrowthProspectsService(req.accountId);
+    const prospect = await service.scheduleFollowup(req.params.id, days);
+    await service.logEvent(req.params.id, 'snoozed', { days });
+    res.json({ prospect });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
