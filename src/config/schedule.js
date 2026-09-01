@@ -45,6 +45,7 @@ const schedule = {
     { agentId: 'intelligence-analyst', cron: '0 9 * * 2', description: 'Weekly research briefing (Tuesday)' },
     { agentId: 'growth-content-research', cron: '0 5 * * 1', description: 'Weekly Payroll Beacon topic sweep (Monday)' },
     { agentId: 'growth-content-repurposer', cron: '0 6 * * 1', description: 'Weekly content package generation (Monday)' },
+    { agentId: 'growth-scheduler', cron: '0 7 * * 1', description: 'Weekly calendar slot assignment (Monday)' },
     { agentId: 'content-library-manager', cron: '0 8 * * 1', description: 'Weekly scenario generation (Monday)' },
     { agentId: 'wrestling-scraper', cron: '0 5 * * 2', description: 'Weekly wrestling results scrape + stats (Tuesday)' },
   ],

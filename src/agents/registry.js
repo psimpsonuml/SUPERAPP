@@ -19,6 +19,7 @@ const WrestlingScraperAgent = require('./wrestling-scraper');
 const PublishDispatcherAgent = require('./publish-dispatcher');
 const GrowthContentResearchAgent = require('./growth-content-research');
 const GrowthContentRepurposerAgent = require('./growth-content-repurposer');
+const GrowthSchedulerAgent = require('./growth-scheduler');
 
 const registry = {
   'inbox-monitor': {
@@ -161,6 +162,14 @@ const registry = {
     Agent: GrowthContentRepurposerAgent,
     name: 'Growth Content Repurposer',
     domain: 'One source -> platform content package',
+    cycle: 'weekly',
+    essential: false,
+    criticalOnFailure: false,
+  },
+  'growth-scheduler': {
+    Agent: GrowthSchedulerAgent,
+    name: 'Growth Scheduler',
+    domain: 'Assigns approved content to calendar slots',
     cycle: 'weekly',
     essential: false,
     criticalOnFailure: false,

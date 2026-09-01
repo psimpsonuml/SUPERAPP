@@ -362,7 +362,8 @@ class GrowthProspectsService {
 
   // ── Status transitions ──────────────────────────────────
 
-  async setStatus(id, status, { event, metadata = {} } = {}) {
+  async setStatus(id, status, options) {
+    const { event, metadata = {} } = options || {};
     const patch = { status, updated_at: new Date().toISOString() };
 
     if (status === 'contacted') {

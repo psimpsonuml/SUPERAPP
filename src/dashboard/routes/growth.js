@@ -8,6 +8,7 @@ const GrowthProspectsService = require('../../shared/growth/prospects');
 const GrowthCostService = require('../../shared/growth/cost');
 const GrowthAttributionService = require('../../shared/growth/attribution');
 const ContentGenerator = require('../../shared/growth/generator');
+const GrowthCalendarService = require('../../shared/growth/calendar');
 const logger = require('../../shared/logger');
 
 const router = express.Router();
@@ -524,6 +525,153 @@ router.post('/generate', async (req, res) => {
     }
 
     res.json({ generated: stored, failed: pkg.failed, count: stored.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ── CALENDAR (spec §3) ────────────────────────────────────
+
+// GET /api/growth/calendar/week?offset=0
+router.get('/calendar/week', async (req, res) => {
+  try {
+    const service = new GrowthCalendarService(req.accountId);
+    res.json(await service.week({ weekOffset: parseInt(req.query.offset, 10) || 0 }));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/calendar/month?year=&month=
+router.get('/calendar/month', async (req, res) => {
+  try {
+    const service = new GrowthCalendarService(req.accountId);
+    res.json(await service.month({
+      year: req.query.year ? parseInt(req.query.year, 10) : undefined,
+      month: req.query.month ? parseInt(req.query.month, 10) : undefined,
+    }));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/calendar/slots — cadence slots, filled and open
+router.get('/calendar/slots', async (req, res) => {
+  try {
+    const service = new GrowthCalendarService(req.accountId);
+    res.json(await service.slots({ weekOffset: parseInt(req.query.offset, 10) || 0 }));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/calendar/unscheduled — approved content with no date
+router.get('/calendar/unscheduled', async (req, res) => {
+  try {
+    const service = new GrowthCalendarService(req.accountId);
+    res.json({ content: await service.unscheduledApproved({ limit: 50 }) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/calendar/warnings — topic repetition
+router.get('/calendar/warnings', async (req, res) => {
+  try {
+    const service = new GrowthCalendarService(req.accountId);
+    res.json({ warnings: await service.repetitionWarnings({ days: parseInt(req.query.days, 10) || 14 }) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/calendar/:id/reschedule — drag-and-drop target
+router.post('/calendar/:id/reschedule', async (req, res) => {
+  try {
+    const { scheduled_for } = req.body;
+    if (!scheduled_for) return res.status(400).json({ error: 'scheduled_for is required' });
+    const service = new GrowthCalendarService(req.accountId);
+    res.json({ content: await service.reschedule(req.params.id, scheduled_for) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/calendar/:id/duplicate
+router.post('/calendar/:id/duplicate', async (req, res) => {
+  try {
+    const service = new GrowthCalendarService(req.accountId);
+    res.json({ content: await service.duplicate(req.params.id, { scheduledFor: req.body?.scheduled_for }) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/growth/calendar/:id/unschedule
+router.post('/calendar/:id/unschedule', async (req, res) => {
+  try {
+    const service = new GrowthCalendarService(req.accountId);
+    res.json({ content: await service.unschedule(req.params.id) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// ── DASHBOARD (spec §1) ───────────────────────────────────
+
+// GET /api/growth/dashboard — the control-center summary
+router.get('/dashboard', async (req, res) => {
+  try {
+    const contentService = new GrowthContentService(req.accountId);
+    const prospectService = new GrowthProspectsService(req.accountId);
+    const calendarService = new GrowthCalendarService(req.accountId);
+    const costService = new GrowthCostService(req.accountId);
+    const settingsService = new GrowthSettingsService(req.accountId);
+
+    const settled = await Promise.allSettled([
+      contentService.listAwaitingApproval({ limit: 100 }),
+      calendarService.week({ weekOffset: 0 }),
+      prospectService.listPriorityQueue({ limit: 50 }),
+      prospectService.listFollowupsDue({ limit: 50 }),
+      costService.periods(),
+      settingsService.get('savings'),
+      prospectService.funnelCounts(),
+      calendarService.repetitionWarnings({ days: 14 }),
+    ]);
+
+    const val = (i, fallback) => settled[i].status === 'fulfilled' ? settled[i].value : fallback;
+
+    const awaiting = val(0, []);
+    const week = val(1, { total_scheduled: 0, days: [] });
+    const priority = val(2, []);
+    const followups = val(3, []);
+    const costs = val(4, { today: 0, week: 0, month: 0 });
+    const savings = val(5, { content_creator_monthly: 285 });
+    const funnel = val(6, { total: 0, byStatus: {}, byBand: {} });
+    const warnings = val(7, []);
+
+    // Surface anything that failed rather than reporting a clean zero
+    const degraded = settled
+      .map((s, i) => s.status === 'rejected' ? { index: i, error: s.reason?.message } : null)
+      .filter(Boolean);
+
+    res.json({
+      content_awaiting_approval: awaiting.length,
+      scheduled_this_week: week.total_scheduled,
+      priority_prospects: priority.length,
+      followups_due: followups.length,
+      positive_replies_month: funnel.byStatus?.positive || 0,
+      registrations_from_growth: funnel.byStatus?.registered || 0,
+      estimated_monthly_cost: costs.month,
+      estimated_monthly_savings: savings.content_creator_monthly || 0,
+      net_growth_system_cost: +(costs.month - (savings.content_creator_monthly || 0)).toFixed(2),
+      costs,
+      funnel,
+      warnings,
+      manual_posting_required: awaiting.filter(i => i.requires_manual_posting).length,
+      degraded: degraded.length > 0 ? degraded : undefined,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -236,7 +236,8 @@ class GrowthContentService {
     return data || [];
   }
 
-  async updateContent(id, patch, { event, eventMetadata } = {}) {
+  async updateContent(id, patch, options) {
+    const { event, eventMetadata } = options || {};
     const { data, error } = await this.db
       .from('growth_content')
       .update({ ...patch, updated_at: new Date().toISOString() })
@@ -250,7 +251,8 @@ class GrowthContentService {
     return data;
   }
 
-  async approve(id, { scheduledFor } = {}) {
+  async approve(id, options) {
+    const { scheduledFor } = options || {};
     const existing = await this.getContent(id);
     if (!existing) throw new Error('Content not found');
     if (TERMINAL_STATUSES.has(existing.status)) {
