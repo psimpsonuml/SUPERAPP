@@ -1,5 +1,6 @@
 const BaseAgent = require('./base-agent');
 const { dispatch } = require('../shared/dispatcher');
+const { publishDueContent } = require('../shared/growth/publish');
 
 // ══════════════════════════════════════════════════════════════════
 // Publish Dispatcher
@@ -70,6 +71,22 @@ class PublishDispatcherAgent extends BaseAgent {
           agentId: this.agentId,
         });
       }
+    }
+
+    // ── 3. Growth content whose scheduled time has arrived ──
+    try {
+      const growth = await publishDueContent(this.accountId, { limit: MAX_PER_RUN });
+      results.growthDue = growth.attempted;
+      results.growthPublished = growth.published;
+      results.growthManual = growth.manual;
+      results.dispatched += growth.published;
+      results.failed += growth.failed;
+      if (growth.failed > 0) {
+        results.growthFailures = growth.outcomes.filter(o => !o.ok && o.reason !== 'manual_posting_required');
+      }
+    } catch (err) {
+      this.logger.warn(`Growth content publish pass failed: ${err.message}`, { agentId: this.agentId });
+      this.errors.push({ message: `Growth publish: ${err.message}` });
     }
 
     this.itemsProduced = results.dispatched;

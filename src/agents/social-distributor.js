@@ -449,10 +449,22 @@ Respond with ONLY valid JSON (no markdown, no code fences):
       ? `${post.text}\n\n${post.hashtags.join(' ')}`
       : post.text;
 
+    // Instagram has no text-only post — it requires a reachable image.
+    // This previously fell back to https://placeholder.com/img.jpg,
+    // which guaranteed a container-creation failure that was invisible
+    // because the transport ignored status codes. Refusing here is the
+    // honest outcome (spec §4: never substitute placeholder images).
+    if (!post.imageUrl) {
+      throw new Error(
+        'Instagram requires a hosted image URL. The pipeline produces an image '
+        + 'prompt, not a rendered image — generate and host one before posting.'
+      );
+    }
+
     // Step 1: Create media container
     const containerBody = JSON.stringify({
       caption,
-      image_url: post.imageUrl || 'https://placeholder.com/img.jpg',
+      image_url: post.imageUrl,
       access_token: accessToken,
     });
 
@@ -957,7 +969,17 @@ Respond with ONLY valid JSON (no markdown, no code fences):
       const req = https.request(options, (res) => {
         let data = '';
         res.on('data', chunk => { data += chunk; });
-        res.on('end', () => resolve(data));
+        res.on('end', () => {
+          // Status was previously ignored entirely, so a 401 or 429 was
+          // treated as a successful post and JSON.parse then threw on
+          // the HTML error page.
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            const err = new Error(`HTTP ${res.statusCode}: ${data.slice(0, 300)}`);
+            err.status = res.statusCode;
+            return reject(err);
+          }
+          resolve(data);
+        });
       });
       req.on('error', reject);
       req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
@@ -976,7 +998,14 @@ Respond with ONLY valid JSON (no markdown, no code fences):
       const req = https.request(options, (res) => {
         let data = '';
         res.on('data', chunk => { data += chunk; });
-        res.on('end', () => resolve(data));
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            const err = new Error(`HTTP ${res.statusCode}: ${data.slice(0, 300)}`);
+            err.status = res.statusCode;
+            return reject(err);
+          }
+          resolve(data);
+        });
       });
       req.on('error', reject);
       req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });

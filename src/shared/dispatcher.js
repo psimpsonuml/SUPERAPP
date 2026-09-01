@@ -58,12 +58,12 @@ const handlers = {
     },
   },
 
-  // Growth OS content. Publishing integrations arrive in Phase 10; until
-  // then approval advances the record to 'approved' so it reaches the
-  // calendar. Anything flagged requires_manual_posting stops here by
-  // design and waits for the human to post it.
+  // Growth OS content. Approval publishes immediately when the item is
+  // due and the platform has a working publisher; otherwise it is
+  // approved onto the calendar and the scheduled-post drainer picks it
+  // up at its time. Manual platforms stop here for the human.
   growth_content: {
-    name: 'growth-content.approve',
+    name: 'growth-content.publish',
     async handle({ item, accountId }) {
       const contentId = item.full_content?.growthContentId;
       if (!contentId) return { ok: false, reason: 'missing_growth_content_id' };
@@ -74,19 +74,35 @@ const handlers = {
       const existing = await service.getContent(contentId);
       if (!existing) return { ok: false, reason: 'content_not_found' };
 
+      // Spec §12 — manual platforms are approved and wait for the human.
       if (existing.requires_manual_posting) {
         await service.approve(contentId);
         return { ok: true, result: { contentId, manualPostingRequired: true } };
       }
 
-      const updated = await service.approve(contentId, {
-        scheduledFor: item.full_content?.scheduledFor || null,
+      const approved = await service.approve(contentId, {
+        scheduledFor: item.full_content?.scheduledFor || existing.scheduled_for || null,
       });
 
-      return {
-        ok: true,
-        result: { contentId, status: updated.status, platform: updated.platform },
-      };
+      // Scheduled for later — the publish-dispatcher will run it then.
+      const dueAt = approved.scheduled_for ? new Date(approved.scheduled_for) : null;
+      if (dueAt && dueAt.getTime() > Date.now()) {
+        return {
+          ok: true,
+          result: { contentId, status: approved.status, publishesAt: approved.scheduled_for },
+        };
+      }
+
+      const { publishGrowthContent } = require('./growth/publish');
+      const published = await publishGrowthContent(accountId, contentId);
+
+      // A publish that could not run is not a dispatch failure — the
+      // approval stands and the reason is recorded on the content.
+      if (!published.ok) {
+        return { ok: false, reason: published.reason, result: published };
+      }
+
+      return { ok: true, result: published };
     },
   },
 };

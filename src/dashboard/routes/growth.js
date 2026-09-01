@@ -14,6 +14,8 @@ const providers = require('../../shared/growth/providers');
 const ProspectResearchService = require('../../shared/growth/research');
 const OutreachService = require('../../shared/growth/outreach');
 const GrowthAnalyticsService = require('../../shared/growth/analytics');
+const publishers = require('../../shared/growth/publishers');
+const { publishGrowthContent } = require('../../shared/growth/publish');
 const logger = require('../../shared/logger');
 
 const router = express.Router();
@@ -1096,6 +1098,40 @@ router.get('/analytics/segments', async (req, res) => {
   try {
     const service = new GrowthAnalyticsService(req.accountId);
     res.json({ segments: await service.segmentPerformance() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ── PUBLISHING (spec §33 Phase 10) ────────────────────────
+
+// GET /api/growth/publishers — what is wired and what is manual
+router.get('/publishers', (_req, res) => {
+  const s = publishers.status();
+  const automated = Object.entries(s).filter(([, v]) => v.automated);
+  res.json({
+    publishers: s,
+    automated_count: automated.length,
+    configured_count: automated.filter(([, v]) => v.configured).length,
+    ready: automated.filter(([, v]) => v.configured).map(([k]) => k),
+    needs_credentials: automated.filter(([, v]) => !v.configured)
+      .map(([k, v]) => ({ platform: k, missing: v.missing_env })),
+  });
+});
+
+// POST /api/growth/content/:id/publish — publish now
+router.post('/content/:id/publish', async (req, res) => {
+  try {
+    const result = await publishGrowthContent(req.accountId, req.params.id);
+    if (!result.ok) {
+      const code = result.reason === 'manual_posting_required' ? 409
+        : result.reason === 'publisher_not_configured' ? 503
+        : result.reason === 'content_not_found' ? 404
+        : 422;
+      return res.status(code).json(result);
+    }
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
