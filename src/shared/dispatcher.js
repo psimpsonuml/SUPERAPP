@@ -117,6 +117,7 @@ const MANUAL_ONLY = new Set([
   // Spec §12: personal LinkedIn is prepared, never posted automatically.
   'linkedin_personal_post',
   'intelligence_briefing',
+  'growth_briefing',
   'chronostates_scenario',
   'ad_creative',
   'video_concept',

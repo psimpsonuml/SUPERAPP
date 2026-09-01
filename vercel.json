@@ -106,6 +106,10 @@
       "schedule": "0 6 * * 2"
     },
     {
+      "path": "/api/cron/growth-analyst",
+      "schedule": "0 9 * * 5"
+    },
+    {
       "path": "/api/cron/wrestling-scraper",
       "schedule": "0 5 * * 2"
     },

@@ -13,6 +13,7 @@ const ProspectImportService = require('../../shared/growth/import');
 const providers = require('../../shared/growth/providers');
 const ProspectResearchService = require('../../shared/growth/research');
 const OutreachService = require('../../shared/growth/outreach');
+const GrowthAnalyticsService = require('../../shared/growth/analytics');
 const logger = require('../../shared/logger');
 
 const router = express.Router();
@@ -1040,6 +1041,63 @@ router.post('/prospects/:id/snooze', async (req, res) => {
     res.json({ prospect });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+
+// ── ANALYTICS (spec §15, §16) ─────────────────────────────
+
+// GET /api/growth/analytics — the full report
+router.get('/analytics', async (req, res) => {
+  try {
+    const service = new GrowthAnalyticsService(req.accountId);
+    res.json(await service.fullReport({ days: parseInt(req.query.days, 10) || 30 }));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/analytics/funnel
+router.get('/analytics/funnel', async (req, res) => {
+  try {
+    const service = new GrowthAnalyticsService(req.accountId);
+    const days = parseInt(req.query.days, 10) || 30;
+    res.json({
+      content: await service.contentFunnel({ days }),
+      outbound: await service.outboundFunnel({ days }),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/analytics/ratios — the six spec §15 ratios
+router.get('/analytics/ratios', async (req, res) => {
+  try {
+    const service = new GrowthAnalyticsService(req.accountId);
+    res.json(await service.ratios({ days: parseInt(req.query.days, 10) || 30 }));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/analytics/diagnostic — the §16 campaign read
+router.get('/analytics/diagnostic', async (req, res) => {
+  try {
+    const service = new GrowthAnalyticsService(req.accountId);
+    res.json(await service.cohortDiagnostic({ days: parseInt(req.query.days, 10) || 90 }));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/growth/analytics/segments — which ICP slices reply
+router.get('/analytics/segments', async (req, res) => {
+  try {
+    const service = new GrowthAnalyticsService(req.accountId);
+    res.json({ segments: await service.segmentPerformance() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
