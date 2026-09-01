@@ -20,6 +20,7 @@ const PublishDispatcherAgent = require('./publish-dispatcher');
 const GrowthContentResearchAgent = require('./growth-content-research');
 const GrowthContentRepurposerAgent = require('./growth-content-repurposer');
 const GrowthSchedulerAgent = require('./growth-scheduler');
+const GrowthProspectEngineAgent = require('./growth-prospect-engine');
 
 const registry = {
   'inbox-monitor': {
@@ -170,6 +171,14 @@ const registry = {
     Agent: GrowthSchedulerAgent,
     name: 'Growth Scheduler',
     domain: 'Assigns approved content to calendar slots',
+    cycle: 'weekly',
+    essential: false,
+    criticalOnFailure: false,
+  },
+  'growth-prospect-engine': {
+    Agent: GrowthProspectEngineAgent,
+    name: 'Growth Prospect Engine',
+    domain: 'Apollo import -> dedup -> fit score',
     cycle: 'weekly',
     essential: false,
     criticalOnFailure: false,

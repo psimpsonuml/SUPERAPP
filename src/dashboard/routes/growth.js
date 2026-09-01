@@ -9,6 +9,8 @@ const GrowthCostService = require('../../shared/growth/cost');
 const GrowthAttributionService = require('../../shared/growth/attribution');
 const ContentGenerator = require('../../shared/growth/generator');
 const GrowthCalendarService = require('../../shared/growth/calendar');
+const ProspectImportService = require('../../shared/growth/import');
+const providers = require('../../shared/growth/providers');
 const logger = require('../../shared/logger');
 
 const router = express.Router();
@@ -674,6 +676,77 @@ router.get('/dashboard', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ── PROSPECT IMPORT (spec §6, §18) ────────────────────────
+
+// GET /api/growth/import/status — which provider is live
+router.get('/import/status', (_req, res) => {
+  res.json({
+    configured: providers.isConfigured(),
+    provider: providers.providerName(),
+    apollo_key_present: !!process.env.APOLLO_API_KEY,
+    note: providers.providerName() === 'mock'
+      ? 'Mock provider active — all prospects are fabricated test data at @example.invalid'
+      : undefined,
+  });
+});
+
+// POST /api/growth/import — import one page from the provider
+router.post('/import', async (req, res) => {
+  try {
+    const service = new ProspectImportService(req.accountId);
+    const result = await service.importPage({
+      page: parseInt(req.body?.page, 10) || 1,
+      perPage: Math.min(parseInt(req.body?.per_page, 10) || 25, 100),
+      titles: req.body?.titles,
+      employeeMin: req.body?.employee_min,
+      employeeMax: req.body?.employee_max,
+      industries: req.body?.industries,
+    });
+    res.json(result);
+  } catch (error) {
+    const code = error.code === 'PROVIDER_UNAVAILABLE' ? 503 : 500;
+    res.status(code).json({ error: error.message, code: error.code });
+  }
+});
+
+// POST /api/growth/import/enrich — reveal emails (spends credits)
+router.post('/import/enrich', async (req, res) => {
+  try {
+    const service = new ProspectImportService(req.accountId);
+    const limit = Math.min(parseInt(req.body?.limit, 10) || 10, 50);
+    res.json(await service.enrichMissingEmails({ limit }));
+  } catch (error) {
+    const code = error.code === 'PROVIDER_UNAVAILABLE' ? 503 : 500;
+    res.status(code).json({ error: error.message, code: error.code });
+  }
+});
+
+// GET /api/growth/import/preview — search without storing anything
+router.get('/import/preview', async (req, res) => {
+  try {
+    const service = new ProspectImportService(req.accountId);
+    const provider = service.provider();
+    const filters = await service.filtersFromIcp({
+      page: parseInt(req.query.page, 10) || 1,
+      perPage: Math.min(parseInt(req.query.per_page, 10) || 10, 25),
+    });
+    const { prospects, pagination } = await provider.searchPeople(filters);
+
+    res.json({
+      provider: provider.name,
+      filters,
+      pagination,
+      prospects,
+      with_email: prospects.filter(p => p.email).length,
+      without_email: prospects.filter(p => !p.email).length,
+    });
+  } catch (error) {
+    const code = error.code === 'PROVIDER_UNAVAILABLE' ? 503 : 500;
+    res.status(code).json({ error: error.message, code: error.code });
   }
 });
 

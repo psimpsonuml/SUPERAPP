@@ -47,6 +47,7 @@ const schedule = {
     { agentId: 'growth-content-repurposer', cron: '0 6 * * 1', description: 'Weekly content package generation (Monday)' },
     { agentId: 'growth-scheduler', cron: '0 7 * * 1', description: 'Weekly calendar slot assignment (Monday)' },
     { agentId: 'content-library-manager', cron: '0 8 * * 1', description: 'Weekly scenario generation (Monday)' },
+    { agentId: 'growth-prospect-engine', cron: '0 6 * * 2', description: 'Weekly Apollo prospect import + scoring (Tuesday)' },
     { agentId: 'wrestling-scraper', cron: '0 5 * * 2', description: 'Weekly wrestling results scrape + stats (Tuesday)' },
   ],
 
