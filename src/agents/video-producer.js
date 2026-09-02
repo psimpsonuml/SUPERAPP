@@ -2,6 +2,7 @@ const BaseAgent = require('./base-agent');
 const products = require('../config/products');
 const config = require('../config');
 const crypto = require('crypto');
+const { SIGNAL_COLUMNS, withSignalText } = require('../shared/pain-points');
 
 // ── Topic source queries per product ──────────────────────
 const TOPIC_HOOKS = {
@@ -178,7 +179,7 @@ class VideoProducerAgent extends BaseAgent {
     // Source 3: Pain points with high scores
     const { data: painPoints } = await this.supabase
       .from('pain_points')
-      .select('id, signal_text, score, product')
+      .select(SIGNAL_COLUMNS)
       .eq('account_id', this.accountId)
       .or(`product.eq.${productId},product_relevance.eq.${productId}`)
       .order('score', { ascending: false })
@@ -187,7 +188,7 @@ class VideoProducerAgent extends BaseAgent {
     if (painPoints && painPoints.length > 0) {
       return {
         source: 'pain_point',
-        topic: painPoints[0].signal_text,
+        topic: withSignalText(painPoints)[0].signalText,
         painPointId: painPoints[0].id,
         score: painPoints[0].score,
       };
@@ -396,6 +397,16 @@ Return JSON:
       sceneCount: sceneImages.length,
       storagePath,
       format: script.format,
+
+      // ── Production-truth fields — the quality gate depends on these.
+      // Without them a run with placeholder audio, no images and no
+      // FFmpeg pass could still report a produced video.
+      assembled: assembled.assembled === true,
+      assemblyError: assembled.error || null,
+      audioPlaceholder: audio.placeholder === true,
+      audioBytes: audio.sizeBytes || 0,
+      imagesGenerated: sceneImages.filter(img => img.success).length,
+      videoBytes: assembled.videoBuffer ? assembled.videoBuffer.length : 0,
     };
   }
 
@@ -971,16 +982,44 @@ Return JSON:
   }
 
   // ── Quality Gate (7 checks) ─────────────────────────────────
+  // ── Quality gate ────────────────────────────────────────────
+  // A video only counts as produced when a real file actually exists.
+  // Placeholder audio, missing scene images, a skipped or failed FFmpeg
+  // pass, or a zero/undersized output all fail hard — no partial credit.
   runQualityGate(assets, format = 'short') {
     const failures = [];
     const maxDuration = format === 'short' ? this.qualityGates.maxShortFormSec : this.qualityGates.maxLongFormSec;
+    const checks = 10;
 
-    // 1. Audio exists and synced
-    if (!assets.audioSynced) {
-      failures.push('audio_not_synced');
+    // 1. FFmpeg assembly actually ran and succeeded
+    if (!assets.assembled) {
+      failures.push(assets.assemblyError
+        ? `assembly_failed: ${assets.assemblyError}`
+        : 'assembly_skipped: production dependencies unavailable');
     }
 
-    // 2. Duration within range
+    // 2. A real output file exists and clears the minimum size
+    const fileBytes = assets.fileSizeBytes || 0;
+    if (fileBytes < this.qualityGates.minFileSizeBytes) {
+      failures.push(`file_too_small: ${fileBytes}B < ${this.qualityGates.minFileSizeBytes}B`);
+    }
+
+    // 3. The upload produced a retrievable URL
+    if (!assets.videoUrl) {
+      failures.push('no_video_url');
+    }
+
+    // 4. Real audio — not the word-count placeholder
+    if (!assets.audioSynced || assets.audioPlaceholder || (assets.audioBytes || 0) === 0) {
+      failures.push('audio_missing_or_placeholder');
+    }
+
+    // 5. At least one real scene image
+    if ((assets.imagesGenerated || 0) === 0) {
+      failures.push('no_scene_images');
+    }
+
+    // 6. Duration within range
     if (assets.duration < this.qualityGates.minDurationSec) {
       failures.push(`duration_too_short: ${assets.duration}s < ${this.qualityGates.minDurationSec}s`);
     }
@@ -988,29 +1027,24 @@ Return JSON:
       failures.push(`duration_too_long: ${assets.duration}s > ${maxDuration}s`);
     }
 
-    // 3. Caption accuracy
+    // 7. Caption accuracy — only meaningful when audio is real
     if (assets.captionAccuracy < this.qualityGates.captionAccuracy) {
       failures.push(`caption_accuracy_low: ${assets.captionAccuracy} < ${this.qualityGates.captionAccuracy}`);
     }
 
-    // 4. Thumbnail exists (unless placeholder)
-    if (!assets.thumbnailUrl && !assets.thumbnailUrl !== undefined) {
-      // Soft warning, not a hard failure
+    // 8. Thumbnail present
+    if (!assets.thumbnailUrl) {
+      failures.push('no_thumbnail');
     }
 
-    // 5. No blank frames
+    // 9. No blank frames
     if (assets.hasBlankFrames) {
       failures.push('has_blank_frames');
     }
 
-    // 6. No silent gaps
-    if (assets.hasSilentGaps) {
-      failures.push('has_silent_gaps');
-    }
-
-    // 7. File size check
-    if (assets.fileSizeBytes > 0) {
-      const fileSizeMB = assets.fileSizeBytes / (1024 * 1024);
+    // 10. Upper file-size bound
+    if (fileBytes > 0) {
+      const fileSizeMB = fileBytes / (1024 * 1024);
       if (fileSizeMB > this.qualityGates.maxFileSizeMB) {
         failures.push(`file_too_large: ${fileSizeMB.toFixed(1)}MB > ${this.qualityGates.maxFileSizeMB}MB`);
       }
@@ -1019,8 +1053,8 @@ Return JSON:
     return {
       pass: failures.length === 0,
       failures,
-      checks: 7,
-      passed: 7 - failures.length,
+      checks,
+      passed: Math.max(checks - failures.length, 0),
     };
   }
 

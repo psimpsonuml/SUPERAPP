@@ -16,7 +16,7 @@ const config = {
   },
 
   redis: {
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    url: process.env.UPSTASH_REDIS_URL || process.env.REDIS_URL || 'redis://localhost:6379',
   },
 
   stripe: {
@@ -53,12 +53,6 @@ const config = {
 
   substack: {
     publishEmail: process.env.SUBSTACK_PUBLISH_EMAIL,
-  },
-
-  spotify: {
-    clientId: process.env.SPOTIFY_CLIENT_ID,
-    clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-    redirectUri: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:3000/api/music/callback',
   },
 
   urls: {

@@ -5,7 +5,7 @@ import {
   fetchPersonalHealth, addHealthMetric, importHealthData, fetchHealthImports,
   fetchHealthTargets, setHealthTarget, fetchHealthWorkouts, fetchHealthCorrelations,
   generateHealthCorrelations, fetchHealthDigest, generateHealthDigest,
-  fetchHealthDnaCrossref, deleteHealthData,
+  deleteHealthData,
 } from '../../../lib/api';
 
 const METRIC_CONFIG = {
@@ -255,7 +255,6 @@ export default function HealthPage() {
   const [workouts, setWorkouts] = useState(null);
   const [correlations, setCorrelations] = useState([]);
   const [digest, setDigest] = useState(null);
-  const [dnaCrossref, setDnaCrossref] = useState(null);
   const [imports, setImports] = useState([]);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
@@ -267,12 +266,11 @@ export default function HealthPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [health, wk, corr, dig, dna, imp] = await Promise.allSettled([
+      const [health, wk, corr, dig, imp] = await Promise.allSettled([
         fetchPersonalHealth(days),
         fetchHealthWorkouts(90),
         fetchHealthCorrelations(),
         fetchHealthDigest(),
-        fetchHealthDnaCrossref(),
         fetchHealthImports(),
       ]);
 
@@ -280,7 +278,6 @@ export default function HealthPage() {
       if (wk.status === 'fulfilled') setWorkouts(wk.value);
       if (corr.status === 'fulfilled') setCorrelations(corr.value?.correlations || []);
       if (dig.status === 'fulfilled') setDigest(dig.value?.digests?.[0] || null);
-      if (dna.status === 'fulfilled') setDnaCrossref(dna.value);
       if (imp.status === 'fulfilled') setImports(imp.value?.imports || []);
     } catch { /* noop */ }
     setLoading(false);
@@ -596,27 +593,6 @@ export default function HealthPage() {
             )}
           </div>
 
-          {/* ── DNA Cross-Reference ──────────────────────── */}
-          {dnaCrossref?.available && (
-            <div style={{
-              background: 'var(--card-bg)', borderRadius: 10, padding: 16,
-              border: '1px solid var(--border)', marginBottom: 24,
-              borderLeft: '4px solid #ec4899',
-            }}>
-              <h3 style={{ margin: '0 0 8px 0', fontSize: 14, fontWeight: 600 }}>DNA + Health Insights</h3>
-              {dnaCrossref.insights?.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {dnaCrossref.insights.map((insight, i) => (
-                    <div key={i} className="text-sm">{insight}</div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-muted">
-                  DNA data detected ({dnaCrossref.dnaTraits?.join(', ')}). Health metric cross-referencing will generate insights once enough data is collected.
-                </div>
-              )}
-            </div>
-          )}
         </>
       )}
 

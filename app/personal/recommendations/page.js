@@ -24,16 +24,14 @@ const TYPE_BADGES = {
   top_movies: { label: 'Top Movies', color: '#3b82f6' },
   top_directors: { label: 'Top Directors', color: '#8b5cf6' },
   hidden_gems: { label: 'Hidden Gems', color: '#10b981' },
-  best_books: { label: 'Best Books', color: '#f97316' },
-  top_artists: { label: 'Top Artists', color: '#ec4899' },
+  top_wrestlers: { label: 'Top Wrestlers', color: '#f97316' },
   custom: { label: 'Custom', color: '#6b7280' },
 };
 
 const AUTO_TYPES = [
   { type: 'top_movies', label: 'Top 20 Movies', icon: '\u{1F3AC}' },
   { type: 'hidden_gems', label: 'Hidden Gems', icon: '\u{1F48E}' },
-  { type: 'best_books', label: 'Best Books', icon: '\u{1F4DA}' },
-  { type: 'top_artists', label: 'Top Artists', icon: '\u{1F3B5}' },
+  { type: 'top_wrestlers', label: 'Top Wrestlers', icon: '\u{1F93C}' },
 ];
 
 const SOCIAL_LINKS = {
@@ -677,8 +675,7 @@ export default function RecommendationsPage() {
               <select style={s.select} value={newParty.item_type} onChange={e => setNewParty(p => ({ ...p, item_type: e.target.value }))}>
                 <option value="movie">Movie</option>
                 <option value="tv">TV Show</option>
-                <option value="book">Book</option>
-                <option value="music">Music</option>
+                <option value="wrestling">Wrestling</option>
               </select>
             </div>
 

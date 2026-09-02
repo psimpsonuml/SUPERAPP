@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchLiveEvents, fetchLiveEventsUpcoming, fetchLiveEventDetail,
   createLiveEvent, updateLiveEvent, deleteLiveEvent,
-  fetchLiveEventStats, fetchLiveEventMap, fetchLiveEventHistory,
+  fetchLiveEventStats, fetchLiveEventHistory,
   shareLiveEventHistory,
 } from '../../../lib/api';
 
@@ -19,7 +19,7 @@ const EVENT_TYPES = {
   other:      { label: 'Other',      color: '#6b7280' },
 };
 
-const TABS = ['Timeline', 'Upcoming', 'Map', 'Stats'];
+const TABS = ['Timeline', 'Upcoming', 'Stats'];
 
 function getAccountId() {
   if (typeof window === 'undefined') return null;
@@ -366,85 +366,6 @@ function UpcomingTab({ accountId }) {
   );
 }
 
-// ── Map Tab (placeholder) ───────────────────────────────────
-function MapTab({ accountId }) {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!accountId) return;
-    setLoading(true);
-    fetchLiveEventMap({ account_id: accountId })
-      .then(res => setEvents(res.events || []))
-      .catch(() => setEvents([]))
-      .finally(() => setLoading(false));
-  }, [accountId]);
-
-  if (loading) return <div style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Loading map data...</div>;
-
-  // Group by city
-  const cityCounts = {};
-  events.forEach(ev => {
-    const city = ev.city || 'Unknown';
-    if (!cityCounts[city]) cityCounts[city] = { count: 0, events: [], lat: ev.latitude, lng: ev.longitude };
-    cityCounts[city].count++;
-    cityCounts[city].events.push(ev);
-  });
-  const cities = Object.entries(cityCounts).sort((a, b) => b[1].count - a[1].count);
-
-  if (cities.length === 0) return <div style={{ color: '#64748b', textAlign: 'center', padding: 40 }}>No events with location data yet.</div>;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{
-        background: '#1a1a2e', borderRadius: 12, padding: 20, textAlign: 'center',
-        border: '1px solid #334155',
-      }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" style={{ marginBottom: 8 }}>
-          <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-        </svg>
-        <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
-          Map visualization requires a map API key. Showing city breakdown below.
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-        {cities.map(([city, info]) => (
-          <div key={city} style={{
-            background: '#1a1a2e', borderRadius: 12, padding: 16, border: '1px solid #334155',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <h3 style={{ margin: 0, fontSize: 15, color: '#e2e8f0', fontWeight: 700 }}>{city}</h3>
-              <span style={{
-                background: '#8b5cf622', color: '#8b5cf6', padding: '2px 10px',
-                borderRadius: 12, fontSize: 12, fontWeight: 700,
-              }}>
-                {info.count}
-              </span>
-            </div>
-            {info.lat && info.lng && (
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
-                {parseFloat(info.lat).toFixed(2)}, {parseFloat(info.lng).toFixed(2)}
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {info.events.slice(0, 5).map(ev => (
-                <div key={ev.id} style={{ fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <TypeBadge type={ev.event_type} />
-                  <span>{ev.event_name}</span>
-                </div>
-              ))}
-              {info.events.length > 5 && (
-                <span style={{ fontSize: 11, color: '#64748b' }}>+{info.events.length - 5} more</span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── Stats Tab ───────────────────────────────────────────────
 function StatsTab({ accountId }) {
   const [stats, setStats] = useState(null);
@@ -632,7 +553,6 @@ export default function LiveEventsPage() {
   const tabColors = {
     Timeline: '#8b5cf6',
     Upcoming: '#3b82f6',
-    Map: '#10b981',
     Stats: '#f59e0b',
   };
 
@@ -682,7 +602,6 @@ export default function LiveEventsPage() {
       <div key={refreshKey}>
         {tab === 'Timeline' && <TimelineTab accountId={accountId} onEdit={handleEdit} onDelete={handleDelete} />}
         {tab === 'Upcoming' && <UpcomingTab accountId={accountId} />}
-        {tab === 'Map' && <MapTab accountId={accountId} />}
         {tab === 'Stats' && <StatsTab accountId={accountId} />}
       </div>
 

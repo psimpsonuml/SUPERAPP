@@ -240,23 +240,19 @@ router.post('/rebuild', async (req, res) => {
     if (!accountId) return res.status(400).json({ error: 'account_id required' });
 
     // Source table scanning stubs — in production these would query
-    // facebook_data, journal_entries, entertainment_ratings, book_ratings,
-    // music_ratings, goal_milestones, etc. and upsert into nostalgia_cache.
+    // facebook_data, journal_entries, entertainment_ratings, wrestling_ratings,
+    // wrestling_ratings, goal_milestones, etc. and upsert into nostalgia_cache.
 
     const sampleMemories = [
       { source_module: 'facebook', memory_date: '2019-03-11', content_preview: 'Shared a photo from spring break road trip', year: 2019 },
       { source_module: 'journal', memory_date: '2021-03-11', content_preview: 'Reflected on one year of remote work — grateful for the flexibility', year: 2021 },
       { source_module: 'entertainment', memory_date: '2020-03-11', content_preview: 'Watched Parasite — absolutely blown away', year: 2020 },
-      { source_module: 'books', memory_date: '2022-03-11', content_preview: 'Finished reading "Project Hail Mary" by Andy Weir', year: 2022 },
-      { source_module: 'music', memory_date: '2018-03-11', content_preview: 'Discovered Khruangbin — obsessed with "Maria También"', year: 2018 },
       { source_module: 'goals', memory_date: '2023-03-11', content_preview: 'Hit 100-day meditation streak milestone', year: 2023 },
       { source_module: 'family', memory_date: '2017-03-11', content_preview: 'Family dinner for Mom\'s birthday — homemade lasagna', year: 2017 },
       { source_module: 'learning', memory_date: '2024-03-11', content_preview: 'Completed AWS Solutions Architect certification', year: 2024 },
       { source_module: 'facebook', memory_date: '2016-06-15', content_preview: 'Graduated from university! Best day ever.', year: 2016 },
       { source_module: 'journal', memory_date: '2020-07-04', content_preview: 'Quiet 4th of July at home — watched fireworks from the roof', year: 2020 },
       { source_module: 'entertainment', memory_date: '2023-12-25', content_preview: 'Christmas movie marathon: Die Hard, Home Alone, Elf', year: 2023 },
-      { source_module: 'books', memory_date: '2021-09-01', content_preview: 'Started reading "Dune" before the movie came out', year: 2021 },
-      { source_module: 'music', memory_date: '2022-08-20', content_preview: 'First concert post-pandemic — Tame Impala was unreal', year: 2022 },
       { source_module: 'goals', memory_date: '2019-01-01', content_preview: 'Set New Year resolution: run a half marathon', year: 2019 },
       { source_module: 'goals', memory_date: '2019-05-12', content_preview: 'Finished my first half marathon! 1:58:32', year: 2019 },
     ];

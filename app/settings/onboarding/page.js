@@ -67,10 +67,10 @@ function AssetCard({ assetType, content, product, platform, onRegenerate, regene
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {items.map((item, i) => (
-            <label key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-              <input type="checkbox" style={{ marginTop: 3 }} />
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13 }}>
+              <span style={{ marginTop: 1, color: 'var(--text-muted)' }}>{i + 1}.</span>
               <span>{typeof item === 'string' ? item : item.step || item.description || JSON.stringify(item)}</span>
-            </label>
+            </div>
           ))}
         </div>
       );
@@ -445,10 +445,10 @@ export default function OnboardingPage() {
                         {tool.deployment_checklist && (
                           <div style={{ marginTop: 8 }}>
                             {(Array.isArray(tool.deployment_checklist) ? tool.deployment_checklist : []).map((step, j) => (
-                              <label key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, marginBottom: 4, cursor: 'pointer' }}>
-                                <input type="checkbox" style={{ marginTop: 2 }} />
+                              <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, marginBottom: 4 }}>
+                                <span style={{ color: 'var(--text-muted)' }}>{j + 1}.</span>
                                 <span>{typeof step === 'string' ? step : step.step || JSON.stringify(step)}</span>
-                              </label>
+                              </div>
                             ))}
                           </div>
                         )}
@@ -515,10 +515,10 @@ export default function OnboardingPage() {
                     <div style={{ marginBottom: 8 }}>
                       <div className="text-xs font-semibold text-muted" style={{ marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Mailbox Setup</div>
                       {(Array.isArray(domain.mailbox_steps || domain.mailbox_creation) ? (domain.mailbox_steps || domain.mailbox_creation) : [domain.mailbox_steps || domain.mailbox_creation]).map((step, j) => (
-                        <label key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, cursor: 'pointer', marginBottom: 3 }}>
-                          <input type="checkbox" style={{ marginTop: 2 }} />
+                        <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, marginBottom: 3 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{j + 1}.</span>
                           <span>{typeof step === 'string' ? step : step.step || JSON.stringify(step)}</span>
-                        </label>
+                        </div>
                       ))}
                     </div>
                   )}

@@ -7,7 +7,6 @@ const SocialDistributorAgent = require('./social-distributor');
 const VideoProducerAgent = require('./video-producer');
 const ContentLibraryManagerAgent = require('./content-library-manager');
 const CommunityScoutAgent = require('./community-scout');
-const CommunityStrategistAgent = require('./community-strategist');
 const PainPointHunterAgent = require('./pain-point-hunter');
 const QaPlaytestAgent = require('./qa-playtest');
 const OutreachProspectorAgent = require('./outreach-prospector');
@@ -16,14 +15,21 @@ const AdCreativeAgent = require('./ad-creative');
 const ProductIntelligenceAgent = require('./product-intelligence');
 const UserLifecycleAgent = require('./user-lifecycle');
 const InfrastructureMonitorAgent = require('./infrastructure-monitor');
-const BuilderCommunityAgent = require('./builder-community');
+const WrestlingScraperAgent = require('./wrestling-scraper');
+const PublishDispatcherAgent = require('./publish-dispatcher');
+const GrowthContentResearchAgent = require('./growth-content-research');
+const GrowthContentRepurposerAgent = require('./growth-content-repurposer');
+const GrowthSchedulerAgent = require('./growth-scheduler');
+const GrowthProspectEngineAgent = require('./growth-prospect-engine');
+const GrowthOutreachAssistantAgent = require('./growth-outreach-assistant');
+const GrowthAnalystAgent = require('./growth-analyst');
 
 const registry = {
   'inbox-monitor': {
     Agent: InboxMonitorAgent,
     name: 'Inbox Monitor',
-    domain: 'Email monitoring & response',
-    cycle: 'continuous',
+    domain: 'Email classification & response drafting',
+    cycle: 'configurable',
     essential: true,
     criticalOnFailure: true,
   },
@@ -70,16 +76,8 @@ const registry = {
   'community-scout': {
     Agent: CommunityScoutAgent,
     name: 'Community Scout',
-    domain: 'Group/community discovery',
-    cycle: 'weekly',
-    essential: false,
-    criticalOnFailure: false,
-  },
-  'community-strategist': {
-    Agent: CommunityStrategistAgent,
-    name: 'Community Strategist',
-    domain: 'Rule-aware content calendar',
-    cycle: 'weekly',
+    domain: 'Community discovery + rule-aware content calendar',
+    cycle: 'monthly',
     essential: false,
     criticalOnFailure: false,
   },
@@ -111,7 +109,7 @@ const registry = {
     Agent: IntelligenceAnalystAgent,
     name: 'Intelligence Analyst',
     domain: 'Influencer/platform/publisher research',
-    cycle: 'daily',
+    cycle: 'weekly',
     essential: false,
     criticalOnFailure: false,
   },
@@ -147,11 +145,67 @@ const registry = {
     essential: true,
     criticalOnFailure: true,
   },
-  'builder-community': {
-    Agent: BuilderCommunityAgent,
-    name: 'Builder Community',
-    domain: 'Builder intel gathering & promo posting',
+  'publish-dispatcher': {
+    Agent: PublishDispatcherAgent,
+    name: 'Publish Dispatcher',
+    domain: 'Drains approved items and scheduled posts',
+    cycle: 'continuous',
+    essential: true,
+    criticalOnFailure: true,
+  },
+  'growth-content-research': {
+    Agent: GrowthContentResearchAgent,
+    name: 'Growth Content Research',
+    domain: 'Payroll Beacon topic discovery -> content sources',
+    cycle: 'weekly',
+    essential: false,
+    criticalOnFailure: false,
+  },
+  'growth-content-repurposer': {
+    Agent: GrowthContentRepurposerAgent,
+    name: 'Growth Content Repurposer',
+    domain: 'One source -> platform content package',
+    cycle: 'weekly',
+    essential: false,
+    criticalOnFailure: false,
+  },
+  'growth-scheduler': {
+    Agent: GrowthSchedulerAgent,
+    name: 'Growth Scheduler',
+    domain: 'Assigns approved content to calendar slots',
+    cycle: 'weekly',
+    essential: false,
+    criticalOnFailure: false,
+  },
+  'growth-prospect-engine': {
+    Agent: GrowthProspectEngineAgent,
+    name: 'Growth Prospect Engine',
+    domain: 'Apollo import -> dedup -> fit score',
+    cycle: 'weekly',
+    essential: false,
+    criticalOnFailure: false,
+  },
+  'growth-outreach-assistant': {
+    Agent: GrowthOutreachAssistantAgent,
+    name: 'Growth Outreach Assistant',
+    domain: 'Drafts outreach and builds the daily queue',
     cycle: 'daily',
+    essential: false,
+    criticalOnFailure: false,
+  },
+  'growth-analyst': {
+    Agent: GrowthAnalystAgent,
+    name: 'Growth Analyst',
+    domain: 'Funnel metrics and experiment recommendations',
+    cycle: 'weekly',
+    essential: false,
+    criticalOnFailure: false,
+  },
+  'wrestling-scraper': {
+    Agent: WrestlingScraperAgent,
+    name: 'Wrestling Results Scraper',
+    domain: 'Weekly wrestling results + statistics',
+    cycle: 'weekly',
     essential: false,
     criticalOnFailure: false,
   },

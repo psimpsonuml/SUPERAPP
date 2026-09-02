@@ -163,25 +163,16 @@ We collect your name, email address, and password hash to create and maintain yo
 - Journal entries and sentiment data
 - Reminders, routines, and family log entries
 - Health/fitness metrics (read-only from connected services)
-- Financial data (read-only from Budgeting Beacon)
 - Learning queue items, news feed preferences
 - Live event history, pet records, store/commerce data
-- Podcast listening history, sports ratings
-
-### Genetic Data
-Raw DNA uploads from 23andMe, AncestryDNA, MyHeritage, FamilyTreeDNA, LivingDNA, Nebula Genomics, Dante Labs, HomeDNA, TellMeGen, WeGene, 23Mofang, and WGS VCF files. SNP genotype data is cross-referenced against public research databases (SNPedia, ClinVar, GWAS Catalog).
+- Podcast listening history, wrestling match ratings
 
 ### Facebook Archive Data
 Full Facebook data export including posts, friends, messages, photos, and search history when uploaded by the user.
 
-### Companion Conversations
-All conversations with the Personal Companion including selected mode and personality preferences.
-
 ## 2. Data Storage
 
 - All data stored in Supabase (PostgreSQL) with per-account row-level security
-- Genetic data stored in encrypted columns in a separate isolated schema
-- Dating and companion data stored encrypted, never cross-referenced with other modules unless explicitly enabled
 - Facebook archive data stored encrypted
 - Media files (images, audio, video) stored in Supabase Storage or S3, organized by account
 - Daily automated backups to S3. 30-day retention on daily backups, 1-year on weekly exports
@@ -203,16 +194,14 @@ User data is sent to LLM providers as part of agent processing:
 | OpenAI (GPT) | Fallback inference | Not used for training per API policy |
 | Google (Gemini) | Specialized tasks | Per Google AI terms |
 | ElevenLabs | Voice synthesis | Text sent for audio generation |
-| TMDB, Spotify, Open Library | Metadata queries | No personal data sent |
+| TMDB, Wikipedia | Metadata and results queries | No personal data sent |
 | Stripe | Payment processing | Transaction metadata only |
 
 ## 5. Data Deletion Rights
 
 - Every module has a dedicated delete button for that module's data
 - Full account deletion permanently removes all data across all modules
-- Genetic data: separate "Delete my DNA data" button
 - Facebook data: separate "Delete my Facebook data" button
-- Companion conversations: separate "Delete conversation history" button
 - Deletion is permanent and irreversible. Backups purged within 30 days
 
 ## 6. Compliance
@@ -237,7 +226,7 @@ function generateTermsOfServiceDraft() {
 
 - One account per person. Accurate information required.
 - You are responsible for maintaining account security.
-- Minimum age: 18 (due to genetic data, dating features, and financial data handling).
+- Minimum age: 13.
 
 ## 2. API Key Responsibility
 
@@ -271,18 +260,9 @@ You agree not to use BeaconOps for:
 
 - **Genetic analysis** is for informational purposes only. Not medical advice. Not a diagnostic tool.
 - **Financial data** is for informational purposes only. Not financial advice.
-- **Personal Companion** is for entertainment and emotional support only. Not a substitute for human relationships or professional counseling.
 - **Health dashboard** data is informational only. Not medical advice.
 - **AI-generated content** may contain errors. You are responsible for reviewing before publishing.
 - BeaconOps is not liable for consequences of auto-approved content published without human review.
-
-## 7. Personal Companion Terms
-
-- The AI companion is an artificial intelligence, not a real person.
-- Romantic partner mode is for entertainment and emotional support only.
-- BeaconOps is not responsible for emotional attachment to the AI companion.
-- No explicit sexual content is generated in any companion mode.
-- Monthly wellbeing checks are a feature, not a clinical assessment.
 
 ## 8. Pricing & Billing
 

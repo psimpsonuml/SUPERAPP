@@ -11,10 +11,115 @@
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "src/server.js" },
-    { "src": "/health", "dest": "src/server.js" },
-    { "src": "/auth/(.*)", "dest": "src/server.js" },
-    { "src": "/billing/(.*)", "dest": "src/server.js" },
-    { "src": "/(.*)", "dest": "package.json" }
+    {
+      "src": "/api/(.*)",
+      "dest": "src/server.js"
+    },
+    {
+      "src": "/health",
+      "dest": "src/server.js"
+    },
+    {
+      "src": "/auth/(.*)",
+      "dest": "src/server.js"
+    },
+    {
+      "src": "/billing/(.*)",
+      "dest": "src/server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "package.json"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/infrastructure-monitor",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/publish-dispatcher",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/inbox-monitor",
+      "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/qa-playtest",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/pain-point-hunter",
+      "schedule": "30 5 * * *"
+    },
+    {
+      "path": "/api/cron/seo-aeo-writer",
+      "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/cron/substack-publisher",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/social-distributor",
+      "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/cron/video-producer",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/outreach-prospector",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/growth-outreach-assistant",
+      "schedule": "30 7 * * 1-5"
+    },
+    {
+      "path": "/api/cron/product-intelligence",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/intelligence-analyst",
+      "schedule": "0 9 * * 2"
+    },
+    {
+      "path": "/api/cron/growth-content-research",
+      "schedule": "0 5 * * 1"
+    },
+    {
+      "path": "/api/cron/growth-content-repurposer",
+      "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/growth-scheduler",
+      "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/cron/content-library-manager",
+      "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/cron/growth-prospect-engine",
+      "schedule": "0 6 * * 2"
+    },
+    {
+      "path": "/api/cron/growth-analyst",
+      "schedule": "0 9 * * 5"
+    },
+    {
+      "path": "/api/cron/wrestling-scraper",
+      "schedule": "0 5 * * 2"
+    },
+    {
+      "path": "/api/cron/community-scout",
+      "schedule": "0 6 1 * *"
+    },
+    {
+      "path": "/api/cron/daily-report",
+      "schedule": "0 10 * * *"
+    }
   ]
 }

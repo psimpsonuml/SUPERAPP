@@ -1,6 +1,7 @@
 const BaseAgent = require('./base-agent');
 const products = require('../config/products');
 const Anthropic = require('@anthropic-ai/sdk');
+const { searchOrEmpty } = require('../shared/search');
 
 // ── Search queries per product per category ───────────────────
 
@@ -667,44 +668,14 @@ Only include findings from the last 30 days if possible. If none found, return [
     return findings;
   }
 
-  // ── WEB SEARCH HELPER ──────────────────────────────────────
+  // ── WEB SEARCH ─────────────────────────────────────────────
+  // Real web search via src/shared/search.js. This previously queried
+  // reddit.com/search.json and labelled the results "web research",
+  // so influencer rates, newsletter sponsorships, book agents and
+  // competitor intel were all being extracted from Reddit post text.
 
   async webSearch(query) {
-    // Use Reddit search as a web research proxy
-    // In production, integrate a dedicated search API (SerpAPI, Brave, etc.)
-    try {
-      const encoded = encodeURIComponent(query);
-      const url = `https://www.reddit.com/search.json?q=${encoded}&limit=10&sort=relevance&t=month&raw_json=1`;
-
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': REDDIT_USER_AGENT,
-          Accept: 'application/json',
-        },
-      });
-
-      if (!res.ok) {
-        this.logger.debug(`Reddit search returned ${res.status} for "${query}"`, { agentId: this.agentId });
-        return [];
-      }
-
-      const data = await res.json();
-      const children = data?.data?.children || [];
-
-      return children
-        .filter(c => c.kind === 't3')
-        .map(c => ({
-          title: c.data.title,
-          snippet: (c.data.selftext || '').slice(0, 500),
-          text: (c.data.selftext || '').slice(0, 2000),
-          url: c.data.url || `https://reddit.com${c.data.permalink}`,
-          score: c.data.score,
-          subreddit: c.data.subreddit,
-        }));
-    } catch (err) {
-      this.logger.debug(`Web search failed for "${query}": ${err.message}`, { agentId: this.agentId });
-      return [];
-    }
+    return searchOrEmpty(query, { limit: 10 }, this.logger);
   }
 
   // ── STORAGE & DEDUPLICATION ────────────────────────────────

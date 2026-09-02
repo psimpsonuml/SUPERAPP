@@ -9,6 +9,7 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "orchestrator": "node src/orchestrator/index.js",
+    "agent": "node src/orchestrator/index.js --run",
     "test": "node --test src/tests/**/*.test.js",
     "migrate": "node src/db/migrate.js",
     "seed": "node src/db/seed.js"

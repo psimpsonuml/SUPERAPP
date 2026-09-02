@@ -1,6 +1,7 @@
 const BaseAgent = require('./base-agent');
 const config = require('../config');
 const products = require('../config/products');
+const { SIGNAL_COLUMNS, withSignalText } = require('../shared/pain-points');
 
 // ── Alternate history hooks for subject line generation ────
 const NARRATIVE_HOOKS = [
@@ -187,13 +188,13 @@ class SubstackPublisherAgent extends BaseAgent {
     // Source 3: Community buzz — Pain Point Hunter + Community Scout
     const { data: painPoints } = await this.supabase
       .from('pain_points')
-      .select('signal_text, category, source, score, date_found')
+      .select(SIGNAL_COLUMNS)
       .eq('account_id', this.accountId)
       .or('product.eq.chronostates,product_relevance.eq.chronostates')
       .order('score', { ascending: false })
       .limit(10);
 
-    sources.painPoints = painPoints || [];
+    sources.painPoints = withSignalText(painPoints);
 
     const { data: communityPosts } = await this.supabase
       .from('community_posts')
@@ -248,15 +249,15 @@ class SubstackPublisherAgent extends BaseAgent {
     if (sources.painPoints.length > 0) {
       const topBuzz = sources.painPoints[0];
       theme.communityAngle = {
-        topic: topBuzz.signal_text,
+        topic: topBuzz.signalText,
         source: topBuzz.source,
         score: topBuzz.score,
       };
-      theme.sourceSummary.push(`Community: ${topBuzz.signal_text.slice(0, 60)}`);
+      theme.sourceSummary.push(`Community: ${topBuzz.signalText.slice(0, 60)}`);
 
       if (!theme.primaryTopic) {
         theme.type = 'community_driven';
-        theme.primaryTopic = topBuzz.signal_text;
+        theme.primaryTopic = topBuzz.signalText;
       }
     }
 

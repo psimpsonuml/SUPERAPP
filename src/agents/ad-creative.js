@@ -129,11 +129,16 @@ class AdCreativeAgent extends BaseAgent {
           const compliance = await this.checkCompliance(variant, platformId, productId);
 
           // Store in content_memory
+          // ContentMemoryService.store() expects camelCase contentType /
+          // contentText and a top-level platform. `platform` and
+          // `content_type` are NOT NULL, so the old {type, content} shape
+          // failed the insert on every creative.
           await this.storeContent({
-            type: 'ad_creative',
+            contentType: 'ad_creative',
+            platform: platformId,
             product: productId,
             title: `[${product.name}/${platformId}] ${variant.angle} — ${variant.copy?.headline || variant.copy?.title || variant.copy?.headline1 || 'Ad'}`,
-            content: JSON.stringify(variant),
+            contentText: JSON.stringify(variant),
             metadata: {
               platform: platformId,
               product: productId,
@@ -212,11 +217,12 @@ class AdCreativeAgent extends BaseAgent {
   // ── Performance data for creative strategy bias ─────────
   async getPerformanceData() {
     try {
+      // Columns are content_type and metadata — not type / metadata_json.
       const { data } = await this.supabase
         .from('content_memory')
-        .select('product, title, metadata_json, engagement_score')
+        .select('product, title, metadata, engagement_score')
         .eq('account_id', this.accountId)
-        .eq('type', 'ad_creative')
+        .eq('content_type', 'ad_creative')
         .not('engagement_score', 'is', null)
         .order('engagement_score', { ascending: false })
         .limit(20);

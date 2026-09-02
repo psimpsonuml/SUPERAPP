@@ -1,6 +1,7 @@
 const https = require('https');
 const BaseAgent = require('./base-agent');
 const products = require('../config/products');
+const { searchOrEmpty } = require('../shared/search');
 
 // ── Keyword sets per product ───────────────────────────────
 const PRODUCT_KEYWORDS = {
@@ -44,7 +45,7 @@ class CommunityScoutAgent extends BaseAgent {
     super(accountId, {
       agentId: 'community-scout',
       agentName: 'Community Scout',
-      cycle: 'weekly',
+      cycle: 'monthly',
       defaultTier: 2,
     });
   }
@@ -52,7 +53,16 @@ class CommunityScoutAgent extends BaseAgent {
   // ── Main run — accepts options for partial runs ────────
   async run(options = {}) {
     const { redditOnly = false } = options;
-    const results = { communitiesDiscovered: 0, updated: 0, byProduct: {}, byPlatform: {} };
+    const results = {
+      communitiesDiscovered: 0,
+      updated: 0,
+      byProduct: {},
+      byPlatform: {},
+      communitiesAnalyzed: 0,
+      calendarEntriesCreated: 0,
+      flaggedForReview: 0,
+      warmupScheduled: 0,
+    };
     const platformsToScan = redditOnly ? ['reddit'] : PLATFORMS;
 
     for (const productId of Object.keys(PRODUCT_KEYWORDS)) {
@@ -84,9 +94,19 @@ class CommunityScoutAgent extends BaseAgent {
       }
     }
 
-    // Hand off to Community Strategist for rule parsing + content calendar
-    if (results.communitiesDiscovered > 0) {
-      await this.triggerStrategist();
+    // Phase 2: parse rules and build next week's content calendar.
+    // Runs every cycle — existing communities need their calendar regenerated
+    // even when discovery turns up nothing new.
+    try {
+      const planning = await this.runPlanningPhase();
+      results.communitiesAnalyzed = planning.communitiesAnalyzed;
+      results.calendarEntriesCreated = planning.calendarEntriesCreated;
+      results.flaggedForReview = planning.flaggedForReview;
+      results.warmupScheduled = planning.warmupScheduled;
+      this.itemsProduced = planning.calendarEntriesCreated;
+    } catch (err) {
+      this.logger.warn('Planning phase failed', { error: err.message, agentId: this.agentId });
+      this.errors.push({ message: `Planning phase: ${err.message}` });
     }
 
     return results;
@@ -225,40 +245,14 @@ class CommunityScoutAgent extends BaseAgent {
     return this.scoreAndRank(deduped, productId);
   }
 
-  // ── Google custom search (uses Programmable Search Engine) ──
+  // ── Web search (non-Reddit platform discovery) ─────────────
+  // Previously fell back to the DuckDuckGo *Instant Answer* API, which
+  // returns disambiguation topics rather than search results — so
+  // Facebook/Discord/LinkedIn/Slack discovery silently found nothing
+  // whenever Google CSE keys were absent. Now goes through the shared
+  // provider, which returns [] and logs when unconfigured.
   async googleSearch(query) {
-    // Use Google Custom Search API if available, else fallback to DuckDuckGo HTML
-    const googleKey = process.env.GOOGLE_SEARCH_API_KEY;
-    const googleCx = process.env.GOOGLE_SEARCH_CX;
-
-    if (googleKey && googleCx) {
-      const url = `https://www.googleapis.com/customsearch/v1?key=${googleKey}&cx=${googleCx}&q=${encodeURIComponent(query)}&num=10`;
-      const data = await this.fetchJson(url);
-      return (data?.items || []).map(item => ({
-        title: item.title,
-        url: item.link,
-        snippet: item.snippet,
-      }));
-    }
-
-    // Fallback: DuckDuckGo lite (HTML scraping avoided — use API endpoint)
-    try {
-      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&no_redirect=1`;
-      const data = await this.fetchJson(url);
-      const results = [];
-      for (const topic of (data?.RelatedTopics || [])) {
-        if (topic.FirstURL) {
-          results.push({
-            title: topic.Text?.slice(0, 100) || '',
-            url: topic.FirstURL,
-            snippet: topic.Text || '',
-          });
-        }
-      }
-      return results;
-    } catch (e) {
-      return [];
-    }
+    return searchOrEmpty(query, { limit: 10 }, this.logger);
   }
 
   // ── Scoring ────────────────────────────────────────────
@@ -366,25 +360,20 @@ class CommunityScoutAgent extends BaseAgent {
     return 'new';
   }
 
-  // ── Trigger Community Strategist for rule parsing ──────
-  async triggerStrategist() {
-    try {
-      const { createAgent } = require('./registry');
-      const strategist = createAgent('community-strategist', this.accountId);
-      this.logger.info('Handing off to Community Strategist for rule parsing and content calendar', {
-        agentId: this.agentId,
-      });
-      // Queue rather than await — let the orchestrator handle it
-      await this.supabase.from('agent_runs').insert({
-        account_id: this.accountId,
-        agent_id: 'community-strategist',
-        status: 'queued',
-        triggered_by: 'community-scout',
-        run_started_at: new Date().toISOString(),
-      });
-    } catch (err) {
-      this.logger.warn('Could not trigger Community Strategist', { error: err.message });
-    }
+  // ── Phase 2: rule parsing + content calendar generation ─
+  async runPlanningPhase() {
+    const CommunityPlanner = require('./community-planner');
+    const planner = new CommunityPlanner({
+      accountId: this.accountId,
+      supabase: this.supabase,
+      logger: this.logger,
+    });
+
+    this.logger.info('Starting planning phase: rule parsing and content calendar', {
+      agentId: this.agentId,
+    });
+
+    return planner.plan();
   }
 
   // ── Reddit rule assessment helpers ─────────────────────

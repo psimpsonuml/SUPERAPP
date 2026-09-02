@@ -2,6 +2,8 @@ const BaseAgent = require('./base-agent');
 const Anthropic = require('@anthropic-ai/sdk');
 const https = require('https');
 const config = require('../config');
+const { searchOrEmpty } = require('../shared/search');
+const { sendOutreach } = require('../shared/email');
 
 // ── Product-specific prospect search config ──────────────────
 
@@ -95,7 +97,7 @@ class OutreachProspectorAgent extends BaseAgent {
       cycle: 'daily',
       defaultTier: 2,
     });
-    this.anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
+    this.anthropic = new Anthropic({ apiKey: config.llm.anthropic.apiKey });
   }
 
   async run() {
@@ -646,100 +648,73 @@ Respond with JSON: {"subject": "<email subject>", "body": "<email body>"}`;
   //  EMAIL SENDING (Resend — only after Tier 2 approval)
   // ════════════════════════════════════════════════════════════
 
+  // Sends via the shared email service, which enforces the suppression
+  // list (fails closed) and mailbox rotation with per-day volume caps.
+  // Returns a structured result — the dispatcher distinguishes a policy
+  // refusal from a transport failure.
   async sendApprovedEmail(prospectId, emailDraft) {
-    const resendKey = config.email?.resendApiKey || process.env.RESEND_API_KEY;
-    if (!resendKey) {
-      this.logger.error('RESEND_API_KEY not configured', { agentId: this.agentId });
-      return false;
-    }
-
-    // Get prospect
     const { data: prospect } = await this.supabase
       .from('prospect_pipeline')
       .select('*')
       .eq('id', prospectId)
       .single();
 
-    if (!prospect?.email) {
-      this.logger.error(`No email for prospect ${prospectId}`, { agentId: this.agentId });
-      return false;
+    if (!prospect) {
+      return { sent: false, reason: 'prospect_not_found' };
+    }
+    if (!prospect.email) {
+      this.logger.warn(`No email address for prospect ${prospectId}`, { agentId: this.agentId });
+      return { sent: false, reason: 'prospect_has_no_email' };
+    }
+    if (prospect.do_not_contact) {
+      return { sent: false, reason: 'suppressed', suppressionReason: 'requested_no_contact' };
     }
 
-    // Select mailbox with rotation (least volume today)
-    const mailbox = await this.getNextMailbox(prospect.product);
-    if (!mailbox) {
-      this.logger.error('No available sending mailbox', { agentId: this.agentId });
-      return false;
-    }
+    const result = await sendOutreach({
+      accountId: this.accountId,
+      to: prospect.email,
+      subject: emailDraft.subject,
+      text: emailDraft.body,
+      product: prospect.product,
+      unsubscribeUrl: this.buildUnsubscribeUrl(prospectId),
+    });
 
-    try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: mailbox.email,
-          to: prospect.email,
-          subject: emailDraft.subject,
-          text: emailDraft.body,
-        }),
+    if (!result.sent) {
+      this.logger.warn(`Outreach not sent to ${prospect.email}: ${result.reason}`, {
+        agentId: this.agentId,
+        prospectId,
       });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || `Resend error ${response.status}`);
-      }
-
-      // Update pipeline stage
-      await this.supabase
-        .from('prospect_pipeline')
-        .update({
-          stage: prospect.track === 'partner' ? 'pitched' : 'contacted',
-          last_contacted: new Date().toISOString(),
-          touch_count: (prospect.touch_count || 0) + 1,
-          sent_via: mailbox.email,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', prospectId);
-
-      // Log the send
-      await this.supabase.from('outreach_sends').insert({
-        account_id: this.accountId,
-        prospect_id: prospectId,
-        product: prospect.product,
-        track: prospect.track,
-        sending_domain: mailbox.domain,
-        mailbox_email: mailbox.email,
-        subject: emailDraft.subject,
-        sent_at: new Date().toISOString(),
-      });
-
-      // Increment mailbox daily volume
-      await this.supabase
-        .from('sending_domains')
-        .update({ daily_volume: (mailbox.daily_volume || 0) + 1 })
-        .eq('id', mailbox.id);
-
-      return true;
-    } catch (err) {
-      this.logger.error(`Send failed: ${err.message}`, { agentId: this.agentId });
-      return false;
+      return result;
     }
+
+    await this.supabase
+      .from('prospect_pipeline')
+      .update({
+        stage: prospect.track === 'partner' ? 'pitched' : 'contacted',
+        last_contacted: new Date().toISOString(),
+        touch_count: (prospect.touch_count || 0) + 1,
+        sent_via: result.mailbox.email,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', prospectId);
+
+    await this.supabase.from('outreach_sends').insert({
+      account_id: this.accountId,
+      prospect_id: prospectId,
+      product: prospect.product,
+      track: prospect.track,
+      mailbox_email: result.mailbox.email,
+      message_id: result.messageId,
+      subject: emailDraft.subject,
+      sent_at: new Date().toISOString(),
+    });
+
+    return { sent: true, messageId: result.messageId, mailbox: result.mailbox.email };
   }
 
-  async getNextMailbox(productId) {
-    const { data } = await this.supabase
-      .from('sending_domains')
-      .select('*')
-      .eq('account_id', this.accountId)
-      .eq('warmup_status', 'ready')
-      .eq('blacklisted', false)
-      .order('daily_volume', { ascending: true })
-      .limit(1);
-
-    return data?.[0] || null;
+  buildUnsubscribeUrl(prospectId) {
+    const base = config.urls?.base || 'http://localhost:3000';
+    return `${base}/api/growth/unsubscribe?p=${encodeURIComponent(prospectId)}`;
   }
 
   // ════════════════════════════════════════════════════════════
@@ -850,55 +825,12 @@ Respond with JSON: {"subject": "<email subject>", "body": "<email body>"}`;
   //  WEB SEARCH & HTTP HELPERS
   // ════════════════════════════════════════════════════════════
 
+  // Real web search via the shared provider. This previously
+  // regex-scraped html.duckduckgo.com as its primary path whenever
+  // Google CSE keys were absent — brittle, and silently returned
+  // nothing when the markup changed.
   async webSearch(query) {
-    // Try Google Custom Search first, fall back to DuckDuckGo
-    const googleKey = process.env.GOOGLE_SEARCH_API_KEY;
-    const googleCx = process.env.GOOGLE_SEARCH_CX;
-
-    if (googleKey && googleCx) {
-      try {
-        const url = `https://www.googleapis.com/customsearch/v1?key=${googleKey}&cx=${googleCx}&q=${encodeURIComponent(query)}&num=10`;
-        const data = await this.httpGet(url);
-        return (data.items || []).map(item => ({
-          title: item.title,
-          url: item.link,
-          snippet: item.snippet,
-        }));
-      } catch (err) {
-        this.logger.debug(`Google search fallback: ${err.message}`, { agentId: this.agentId });
-      }
-    }
-
-    // DuckDuckGo HTML search fallback
-    try {
-      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-      const html = await this.httpGetText(ddgUrl, {
-        'User-Agent': 'Mozilla/5.0 (compatible; BeaconOps/1.0)',
-      });
-
-      const results = [];
-      const linkRegex = /<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
-      const snippetRegex = /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-      let linkMatch, snippetMatch;
-      while ((linkMatch = linkRegex.exec(html)) && results.length < 10) {
-        snippetMatch = snippetRegex.exec(html);
-        let href = linkMatch[1];
-        // DuckDuckGo wraps URLs — extract the actual URL
-        const uddg = href.match(/uddg=([^&]+)/);
-        if (uddg) href = decodeURIComponent(uddg[1]);
-
-        results.push({
-          title: linkMatch[2].replace(/<[^>]+>/g, '').trim(),
-          url: href,
-          snippet: snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : '',
-        });
-      }
-
-      return results;
-    } catch (err) {
-      this.logger.debug(`DuckDuckGo search error: ${err.message}`, { agentId: this.agentId });
-      return [];
-    }
+    return searchOrEmpty(query, { limit: 10 }, this.logger);
   }
 
   extractNameFromResult(result) {
