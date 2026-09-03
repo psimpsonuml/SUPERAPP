@@ -64,6 +64,15 @@ CREATE TABLE IF NOT EXISTS growth_brands (
 
 CREATE INDEX IF NOT EXISTS idx_growth_brands_account ON growth_brands(account_id, status);
 
+-- Same account isolation the other growth tables get in 003. Without
+-- it growth_brands would be the one table in the set readable across
+-- accounts, and it is the table that decides which list a message is
+-- written for.
+ALTER TABLE growth_brands ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS growth_brands_isolation ON growth_brands;
+CREATE POLICY growth_brands_isolation ON growth_brands
+  USING (account_id::text = current_setting('app.account_id', TRUE));
+
 -- Exactly one default brand per account. A partial unique index is the
 -- only way to say that without a trigger.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_growth_brands_one_default

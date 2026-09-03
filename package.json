@@ -14,7 +14,8 @@
     "migrate": "node src/db/migrate.js",
     "seed": "node src/db/seed.js",
     "migrate:growth": "node src/db/migrations/run.js",
-    "migrate:status": "node src/db/migrations/run.js --status"
+    "migrate:status": "node src/db/migrations/run.js --status",
+    "migrate:preflight": "node src/db/migrations/run.js --preflight"
   },
   "keywords": [
     "marketing-automation",

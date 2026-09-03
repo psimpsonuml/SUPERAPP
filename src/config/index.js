@@ -13,6 +13,10 @@ const config = {
     url: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
     serviceKey: process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
     anonKey: process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    // Postgres schema holding this app's tables. Defaults to `beacon`
+    // so an install into a database that belongs to another site stays
+    // additive; set to 'public' only on a database this app owns.
+    schema: process.env.SUPABASE_SCHEMA || 'beacon',
   },
 
   redis: {
