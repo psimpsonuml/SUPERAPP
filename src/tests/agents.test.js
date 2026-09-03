@@ -8,9 +8,24 @@ const config = require('../config');
 const schedule = require('../config/schedule');
 
 describe('Agent Registry', () => {
-  it('should have 16 agents registered', () => {
+  // Not a frozen count — that assertion went stale the moment the
+  // Growth OS workers landed and told us nothing when it broke. What
+  // matters is that the registry is populated and that the agents the
+  // system depends on are present.
+  it('should have a populated registry', () => {
     const agents = listAgents();
-    assert.strictEqual(agents.length, 16);
+    assert.ok(agents.length >= 20, `only ${agents.length} agents registered`);
+  });
+
+  it('should register the agents the system depends on', () => {
+    const ids = new Set(listAgents().map(a => a.id));
+    for (const required of [
+      'inbox-monitor', 'infrastructure-monitor', 'user-lifecycle',
+      'publish-dispatcher', 'growth-scheduler', 'growth-prospect-engine',
+      'growth-outreach-assistant', 'growth-analyst',
+    ]) {
+      assert.ok(ids.has(required), `${required} is not registered`);
+    }
   });
 
   it('should have unique agent IDs', () => {
@@ -32,16 +47,27 @@ describe('Agent Registry', () => {
     }
   });
 
+  // These two sets stay pinned. An agent becoming essential means it
+  // keeps running under reduced-ops, and one becoming critical means
+  // its failure pages the owner — both are deliberate decisions, so
+  // the test should fail until someone updates it on purpose.
   it('should have essential agents marked correctly', () => {
     const essentialAgents = listAgents().filter(a => a.essential);
     const essentialIds = essentialAgents.map(a => a.id).sort();
-    assert.deepStrictEqual(essentialIds, ['inbox-monitor', 'infrastructure-monitor', 'user-lifecycle']);
+    assert.deepStrictEqual(essentialIds, [
+      'inbox-monitor', 'infrastructure-monitor', 'publish-dispatcher', 'user-lifecycle',
+    ]);
   });
 
   it('should have critical-on-failure agents marked correctly', () => {
     const criticalAgents = listAgents().filter(a => a.criticalOnFailure);
     const criticalIds = criticalAgents.map(a => a.id).sort();
-    assert.deepStrictEqual(criticalIds, ['inbox-monitor', 'infrastructure-monitor', 'qa-playtest']);
+    // publish-dispatcher is critical because it is the only thing that
+    // turns an approval into an action; silent failure looks exactly
+    // like "nobody approved anything today".
+    assert.deepStrictEqual(criticalIds, [
+      'inbox-monitor', 'infrastructure-monitor', 'publish-dispatcher', 'qa-playtest',
+    ]);
   });
 });
 

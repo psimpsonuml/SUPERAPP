@@ -95,12 +95,34 @@ const DEFAULTS = {
 };
 
 class GrowthSettingsService {
-  constructor(accountId) {
+  /**
+   * @param {string} accountId
+   * @param {string|null} brandId  When given, brand rows override the
+   *   account-wide rows for this account. Omitting it reads and writes
+   *   only the account-wide layer — the behaviour before multi-brand.
+   */
+  constructor(accountId, brandId = null) {
     this.accountId = accountId;
+    this.brandId = brandId || null;
     this._cache = new Map();
   }
 
-  /** Read one settings key, merged over its defaults. */
+  /** A settings service for the same account, scoped to one brand. */
+  forBrand(brandId) {
+    return new GrowthSettingsService(this.accountId, brandId);
+  }
+
+  /**
+   * Read one settings key.
+   *
+   * Three layers, each overriding the last:
+   *   module defaults -> account-wide row -> this brand's row
+   *
+   * A brand only has to state what differs from the account. That is
+   * the point of the layering: the author brand shares the sending
+   * limits but shares none of the ICP, and expressing that as a full
+   * copy of every key would let the two drift silently.
+   */
   async get(key) {
     if (this._cache.has(key)) return this._cache.get(key);
 
@@ -108,22 +130,77 @@ class GrowthSettingsService {
     if (!isSupabaseConfigured()) return { ...fallback };
 
     try {
-      const { data } = await getSupabase()
+      const sb = getSupabase();
+
+      const accountRow = await sb
         .from('growth_settings')
         .select('value')
         .eq('account_id', this.accountId)
         .eq('key', key)
+        .is('brand_id', null)
         .maybeSingle();
 
-      const merged = { ...fallback, ...(data?.value || {}) };
+      let brandValue = {};
+      if (this.brandId) {
+        const brandRow = await sb
+          .from('growth_settings')
+          .select('value')
+          .eq('account_id', this.accountId)
+          .eq('key', key)
+          .eq('brand_id', this.brandId)
+          .maybeSingle();
+        // An empty object is a placeholder seeded by migration 004 for
+        // a key the owner has not configured yet. Spreading it is a
+        // no-op, so the brand correctly inherits the layer below.
+        brandValue = brandRow.data?.value || {};
+      }
+
+      const merged = { ...fallback, ...(accountRow.data?.value || {}), ...brandValue };
       this._cache.set(key, merged);
       return merged;
     } catch (err) {
       logger.warn(`Failed to read growth setting "${key}": ${err.message}`, {
-        accountId: this.accountId,
+        accountId: this.accountId, brandId: this.brandId,
       });
       return { ...fallback };
     }
+  }
+
+  /**
+   * Which layer actually supplied each key, for the settings UI.
+   * Without this the owner cannot tell an inherited value from one
+   * they set deliberately, which is how a brand ends up running on
+   * another brand's ICP without anyone noticing.
+   */
+  async provenance(key) {
+    const fallback = DEFAULTS[key] ?? {};
+    if (!isSupabaseConfigured()) {
+      return Object.fromEntries(Object.keys(fallback).map(k => [k, 'default']));
+    }
+
+    const sb = getSupabase();
+    const accountRow = await sb.from('growth_settings').select('value')
+      .eq('account_id', this.accountId).eq('key', key).is('brand_id', null).maybeSingle();
+
+    let brandValue = {};
+    if (this.brandId) {
+      const r = await sb.from('growth_settings').select('value')
+        .eq('account_id', this.accountId).eq('key', key)
+        .eq('brand_id', this.brandId).maybeSingle();
+      brandValue = r.data?.value || {};
+    }
+    const accountValue = accountRow.data?.value || {};
+
+    const keys = new Set([
+      ...Object.keys(fallback), ...Object.keys(accountValue), ...Object.keys(brandValue),
+    ]);
+    const out = {};
+    for (const k of keys) {
+      if (k in brandValue) out[k] = 'brand';
+      else if (k in accountValue) out[k] = 'account';
+      else out[k] = 'default';
+    }
+    return out;
   }
 
   async all() {
@@ -134,13 +211,32 @@ class GrowthSettingsService {
 
   /**
    * Write a settings key.
+   *
    * @param {string} source 'user' | 'automation' | 'system'
-   * Automation writes that would raise a guarded limit are refused.
+   *   Automation writes that would raise a guarded limit are refused.
+   * @param {string} scope 'brand' | 'account'
+   *   Defaults to 'brand' when this service is brand-scoped. A brand
+   *   write stores only the keys given, so the rest keeps inheriting;
+   *   storing the merged effective value instead would freeze a copy
+   *   of the account config into the brand and the two would drift.
    */
-  async set(key, value, { source = 'user' } = {}) {
+  async set(key, value, options) {
+    const { source = 'user', scope } = options || {};
     if (!isSupabaseConfigured()) throw new Error('Database not configured');
     if (!DEFAULTS[key]) throw new Error(`Unknown settings key: ${key}`);
 
+    const target = scope || (this.brandId ? 'brand' : 'account');
+    if (target !== 'brand' && target !== 'account') {
+      throw new Error(`Unknown settings scope: ${target}`);
+    }
+    if (target === 'brand' && !this.brandId) {
+      throw new Error('Cannot write a brand-scoped setting without a brand');
+    }
+    const brandId = target === 'brand' ? this.brandId : null;
+
+    // Guard against the effective value, not the stored layer — an
+    // automation lowering a brand override while the account limit is
+    // higher is still a lowering, and raising it is still a raise.
     if (key === 'limits' && source === 'automation') {
       const current = await this.get('limits');
       const raised = Object.entries(value)
@@ -155,33 +251,53 @@ class GrowthSettingsService {
       }
     }
 
+    const sb = getSupabase();
+
+    // Read the row for this exact layer, so the merge stays within it.
+    let existing = sb.from('growth_settings')
+      .select('id, value')
+      .eq('account_id', this.accountId)
+      .eq('key', key);
+    existing = brandId ? existing.eq('brand_id', brandId) : existing.is('brand_id', null);
+
+    const { data: row, error: readErr } = await existing.maybeSingle();
+    if (readErr) throw new Error(`Failed to read setting "${key}": ${readErr.message}`);
+
+    const next = { ...(row?.value || {}), ...value };
+
+    // Weights must total 100 *as they will be applied*, which for a
+    // brand means after inheritance — a partial brand override of two
+    // weights is otherwise rejected for not summing to 100 on its own.
     if (key === 'scoring_weights') {
-      const merged = { ...DEFAULT_SCORING_WEIGHTS, ...value };
-      const total = Object.values(merged).reduce((s, n) => s + Number(n || 0), 0);
+      const effective = { ...(await this.get(key)), ...next };
+      const total = Object.values(effective).reduce((s, n) => s + Number(n || 0), 0);
       if (total !== 100) {
         throw new Error(`Scoring weights must total 100 (got ${total})`);
       }
     }
 
-    const current = await this.get(key);
-    const next = { ...current, ...value };
+    const payload = {
+      account_id: this.accountId,
+      brand_id: brandId,
+      key,
+      value: next,
+      updated_by: source,
+      updated_at: new Date().toISOString(),
+    };
 
-    const { data, error } = await getSupabase()
-      .from('growth_settings')
-      .upsert({
-        account_id: this.accountId,
-        key,
-        value: next,
-        updated_by: source,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'account_id,key' })
-      .select()
-      .single();
+    // Explicit insert-or-update rather than upsert: after migration 004
+    // uniqueness lives in two *partial* indexes, and PostgREST's
+    // onConflict cannot name a partial index's predicate.
+    const { data, error } = row
+      ? await sb.from('growth_settings').update(payload).eq('id', row.id).select().single()
+      : await sb.from('growth_settings').insert(payload).select().single();
 
     if (error) throw new Error(`Failed to save setting "${key}": ${error.message}`);
 
-    this._cache.set(key, next);
-    logger.info(`Growth setting "${key}" updated by ${source}`, { accountId: this.accountId });
+    this._cache.delete(key);
+    logger.info(`Growth setting "${key}" updated by ${source} (${target} scope)`, {
+      accountId: this.accountId, brandId,
+    });
     return data;
   }
 

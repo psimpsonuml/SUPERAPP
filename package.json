@@ -12,7 +12,9 @@
     "agent": "node src/orchestrator/index.js --run",
     "test": "node --test src/tests/**/*.test.js",
     "migrate": "node src/db/migrate.js",
-    "seed": "node src/db/seed.js"
+    "seed": "node src/db/seed.js",
+    "migrate:growth": "node src/db/migrations/run.js",
+    "migrate:status": "node src/db/migrations/run.js --status"
   },
   "keywords": [
     "marketing-automation",
@@ -39,6 +41,7 @@
     "mailparser": "^3.9.3",
     "next": "^16.1.6",
     "node-cron": "^3.0.3",
+    "pg": "^8.23.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "resend": "^3.5.0",
